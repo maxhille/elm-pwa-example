@@ -3,6 +3,20 @@ var urlsToCache = [
   '/',
   '/index.js'
 ];
+var db;
+
+// set up database
+var request = indexedDB.open("elm-pwa-example-db");
+request.onerror = function(event) {
+  alert("Why didn't you allow my web app to use IndexedDB?!");
+};
+request.onsuccess = function(event) {
+  db = event.target.result;
+};
+request.onupgradeneeded = function(event) {
+  var db = event.target.result;
+  db.createObjectStore("posts", { autoIncrement: true });
+};
 
 self.addEventListener('install', function(event) {
   // Perform install steps
@@ -26,4 +40,14 @@ self.addEventListener('fetch', function(event) {
       return fetch(event.request);
     })
   );
+});
+
+self.addEventListener('message', function(event){
+  var postsObjectStore = db.transaction("posts", "readwrite").objectStore("posts");
+  var request = postsObjectStore.add(event.data);
+  request.onsuccess = function(event) {
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => client.postMessage("update-db"));
+    });
+  };
 });

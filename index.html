@@ -8,8 +8,25 @@
   <script src="index.js"></script>
 </head>
 
-<body>
+<body onload="init();">
   <h1>Hello Elm PWA Example!</h1>
+
+  <ul id="posts"></ul>
+
+  <form
+    action="#"
+    onsubmit="postAndClear();return false;"
+    autocomplete="off">
+
+    <input id="new-post-text"
+      type="text"
+      maxlength="144"
+      required
+    />
+
+    <input type="submit"/>
+  </form>
+
 </body>
 
 </html>
