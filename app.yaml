@@ -6,3 +6,13 @@ handlers:
     static_files: index.html
     upload: index.html
     secure: always
+
+  - url: /index.js
+    static_files: index.js
+    upload: index.js
+    secure: always
+
+  - url: /service-worker.js
+    static_files: service-worker.js
+    upload: service-worker.js
+    secure: always
