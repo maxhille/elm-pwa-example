@@ -5,28 +5,19 @@
   <meta charset="UTF-8">
   <title>Elm + PWA</title>
   <style></style>
+  <script src="elm.js"></script>
   <script src="index.js"></script>
 </head>
 
-<body onload="init();">
-  <h1>Hello Elm PWA Example!</h1>
-
-  <ul id="posts"></ul>
-
-  <form
-    action="#"
-    onsubmit="postAndClear();return false;"
-    autocomplete="off">
-
-    <input id="new-post-text"
-      type="text"
-      maxlength="144"
-      required
-    />
-
-    <input type="submit"/>
-  </form>
-
+<body>
+  <div id="myApp"></div>
+  <script>
+  var app = Elm.Main.embed(document.getElementById("myApp"));
+  app.ports.post.subscribe(function(text) {
+    post(text);
+  })
+  init();
+  </script>
 </body>
 
 </html>

@@ -1,9 +1,6 @@
 var db;
 
-function postAndClear() {
-  var el = document.getElementById("new-post-text");
-  var text = el.value;
-  el.value = "";
+function post(text) {
   var post = {
     text: text,
     me: true,
@@ -14,22 +11,11 @@ function postAndClear() {
 
 function refreshPosts() {
   var objectStore = db.transaction("posts").objectStore("posts");
-
-  var ul = document.getElementById("posts");
-  while (ul.firstChild) {
-    ul.removeChild(ul.firstChild);
-  }
-
-  objectStore.openCursor().onsuccess = function(event) {
-    var cursor = event.target.result;
-    if (cursor) {
-      var text = cursor.value.text;
-      var li = document.createElement("li");
-      var te = document.createTextNode(text);
-      li.appendChild(te);
-      ul.appendChild(li);
-      cursor.continue();
-    }
+  
+  objectStore.getAll().onsuccess = function(event) {
+    var result = event.target.result;
+    console.log("eintraege", result);
+    app.ports.updatePosts.send(result);
   };
 }
 
@@ -43,7 +29,8 @@ function init() {
     refreshPosts();
   }
   navigator.serviceWorker.register('/service-worker.js')
-    .then(function(registration) {},
+    .then(function(registration) {
+    },
           function(err) { alert("Could not register Service Worker :-(") ;});
 
   // set up database
@@ -61,3 +48,5 @@ function init() {
   };
 
 }
+
+
