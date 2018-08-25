@@ -1,0 +1,144 @@
+var _user$project$Main$initialModel = {
+	text: '',
+	posts: {ctor: '[]'}
+};
+var _user$project$Main$init = {ctor: '_Tuple2', _0: _user$project$Main$initialModel, _1: _elm_lang$core$Platform_Cmd$none};
+var _user$project$Main$viewPost = function (post) {
+	return A2(
+		_elm_lang$html$Html$li,
+		{ctor: '[]'},
+		{
+			ctor: '::',
+			_0: _elm_lang$html$Html$text(post.text),
+			_1: {ctor: '[]'}
+		});
+};
+var _user$project$Main$post = _elm_lang$core$Native_Platform.outgoingPort(
+	'post',
+	function (v) {
+		return v;
+	});
+var _user$project$Main$update = F2(
+	function (msg, model) {
+		var _p0 = msg;
+		switch (_p0.ctor) {
+			case 'SendAndClear':
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{text: ''}),
+					_1: _user$project$Main$post(model.text)
+				};
+			case 'TextChanged':
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{text: _p0._0}),
+					_1: _elm_lang$core$Platform_Cmd$none
+				};
+			default:
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{posts: _p0._0}),
+					_1: _elm_lang$core$Platform_Cmd$none
+				};
+		}
+	});
+var _user$project$Main$updatePosts = _elm_lang$core$Native_Platform.incomingPort(
+	'updatePosts',
+	_elm_lang$core$Json_Decode$list(
+		A2(
+			_elm_lang$core$Json_Decode$andThen,
+			function (text) {
+				return _elm_lang$core$Json_Decode$succeed(
+					{text: text});
+			},
+			A2(_elm_lang$core$Json_Decode$field, 'text', _elm_lang$core$Json_Decode$string))));
+var _user$project$Main$Model = F2(
+	function (a, b) {
+		return {text: a, posts: b};
+	});
+var _user$project$Main$Post = function (a) {
+	return {text: a};
+};
+var _user$project$Main$PostsChanged = function (a) {
+	return {ctor: 'PostsChanged', _0: a};
+};
+var _user$project$Main$subscriptions = function (model) {
+	return _user$project$Main$updatePosts(_user$project$Main$PostsChanged);
+};
+var _user$project$Main$SendAndClear = {ctor: 'SendAndClear'};
+var _user$project$Main$TextChanged = function (a) {
+	return {ctor: 'TextChanged', _0: a};
+};
+var _user$project$Main$view = function (model) {
+	return A2(
+		_elm_lang$html$Html$div,
+		{ctor: '[]'},
+		{
+			ctor: '::',
+			_0: A2(
+				_elm_lang$html$Html$h1,
+				{ctor: '[]'},
+				{
+					ctor: '::',
+					_0: _elm_lang$html$Html$text('Hello Elm PWA Example!'),
+					_1: {ctor: '[]'}
+				}),
+			_1: {
+				ctor: '::',
+				_0: A2(
+					_elm_lang$html$Html$ul,
+					{ctor: '[]'},
+					A2(_elm_lang$core$List$map, _user$project$Main$viewPost, model.posts)),
+				_1: {
+					ctor: '::',
+					_0: A2(
+						_elm_lang$html$Html$form,
+						{
+							ctor: '::',
+							_0: _elm_lang$html$Html_Events$onSubmit(_user$project$Main$SendAndClear),
+							_1: {ctor: '[]'}
+						},
+						{
+							ctor: '::',
+							_0: A2(
+								_elm_lang$html$Html$input,
+								{
+									ctor: '::',
+									_0: _elm_lang$html$Html_Attributes$value(model.text),
+									_1: {
+										ctor: '::',
+										_0: _elm_lang$html$Html_Events$onInput(_user$project$Main$TextChanged),
+										_1: {ctor: '[]'}
+									}
+								},
+								{ctor: '[]'}),
+							_1: {
+								ctor: '::',
+								_0: A2(
+									_elm_lang$html$Html$input,
+									{
+										ctor: '::',
+										_0: _elm_lang$html$Html_Attributes$type_('submit'),
+										_1: {
+											ctor: '::',
+											_0: _elm_lang$html$Html_Attributes$value('Senden'),
+											_1: {ctor: '[]'}
+										}
+									},
+									{ctor: '[]'}),
+								_1: {ctor: '[]'}
+							}
+						}),
+					_1: {ctor: '[]'}
+				}
+			}
+		});
+};
+var _user$project$Main$main = _elm_lang$html$Html$program(
+	{view: _user$project$Main$view, update: _user$project$Main$update, init: _user$project$Main$init, subscriptions: _user$project$Main$subscriptions})();
