@@ -1,11 +1,12 @@
-port module Main exposing (..)
+port module Main exposing (Model, Msg(..), Post, init, initialModel, main, postMessage, subscriptions, update, updatePosts, view, viewPost)
 
+import Browser
 import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events as HE
 
 
-port post : String -> Cmd msg
+port postMessage : String -> Cmd msg
 
 
 port updatePosts : (List Post -> msg) -> Sub msg
@@ -25,30 +26,36 @@ type Msg
     | PostsChanged (List Post)
 
 
-main : Program Never Model Msg
 main =
-    Html.program { view = view, update = update, init = init, subscriptions = subscriptions }
+    Browser.document { view = view, update = update, init = init, subscriptions = subscriptions }
 
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
-    Html.div []
-        [ Html.h1 []
-            [ text "Hello Elm PWA Example!"
-            ]
-        , Html.ul []
-            (List.map viewPost model.posts)
-        , Html.form [ HE.onSubmit SendAndClear ]
-            [ Html.input [ HA.value model.text, HE.onInput TextChanged ] []
-            , Html.input [ HA.type_ "submit", HA.value "Senden" ] []
+    { title = "Elm PWA example"
+    , body =
+        [ Html.div []
+            [ Html.h1 []
+                [ text "Hello Elm PWA Example!"
+                ]
+            , Html.ul []
+                (List.map viewPost model.posts)
+            , Html.form [ HE.onSubmit SendAndClear ]
+                [ Html.input [ HA.value model.text, HE.onInput TextChanged ] []
+                , Html.input [ HA.type_ "submit", HA.value "Senden" ] []
+                ]
             ]
         ]
+    }
 
-viewPost: Post -> Html Msg
-viewPost post = Html.li [] [text post.text]
 
-init : ( Model, Cmd Msg )
-init =
+viewPost : Post -> Html Msg
+viewPost post =
+    Html.li [] [ text post.text ]
+
+
+init : () -> ( Model, Cmd Msg )
+init flags =
     ( initialModel, Cmd.none )
 
 
@@ -66,7 +73,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         SendAndClear ->
-            ( { model | text = "" }, post model.text )
+            ( { model | text = "" }, postMessage model.text )
 
         TextChanged newText ->
             ( { model | text = newText }, Cmd.none )

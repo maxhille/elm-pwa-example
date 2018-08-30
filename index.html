@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Elm + PWA</title>
   <style></style>
   <script src="elm.js"></script>
@@ -12,11 +12,11 @@
 <body>
   <div id="myApp"></div>
   <script>
-  var app = Elm.Main.embed(document.getElementById("myApp"));
-  app.ports.post.subscribe(function(text) {
-    post(text);
-  })
-  init();
+    app = Elm.Main.init();
+    app.ports.postMessage.subscribe(function (text) {
+      post(text);
+    });
+    init()
   </script>
 </body>
 
