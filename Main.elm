@@ -1,4 +1,4 @@
-port module Main exposing (Model, Msg(..), Post, init, initialModel, main, postMessage, subscriptions, update, updatePosts, view, viewPost)
+port module Main exposing (main)
 
 import Browser
 import Html exposing (Html, text)
@@ -41,7 +41,7 @@ view model =
             , Html.ul []
                 (List.map viewPost model.posts)
             , Html.form [ HE.onSubmit SendAndClear ]
-                [ Html.input [ HA.value model.text, HE.onInput TextChanged ] []
+                [ Html.input [ HA.value model.text, HE.onInput (\input -> TextChanged input) ] []
                 , Html.input [ HA.type_ "submit", HA.value "Senden" ] []
                 ]
             ]
