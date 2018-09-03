@@ -11,27 +11,30 @@ function post(text) {
 
 function refreshPosts() {
   var objectStore = db.transaction("posts").objectStore("posts");
-  
+
   objectStore.getAll().onsuccess = function(event) {
     var result = event.target.result;
-    console.log("eintraege", result);
     app.ports.updatePosts.send(result);
   };
 }
 
 function init() {
   // set up service worker
-  if (!('serviceWorker' in navigator)) {
-    alert("Your browser does not support Service Workers - please use a proper browser!");
+  if (!("serviceWorker" in navigator)) {
+    alert(
+      "Your browser does not support Service Workers - please use a proper browser!"
+    );
     return;
   }
   navigator.serviceWorker.onmessage = function(event) {
     refreshPosts();
-  }
-  navigator.serviceWorker.register('/service-worker.js')
-    .then(function(registration) {
-    },
-          function(err) { alert("Could not register Service Worker :-(") ;});
+  };
+  navigator.serviceWorker.register("/service-worker.js").then(
+    function(registration) {},
+    function(err) {
+      alert("Could not register Service Worker :-(");
+    }
+  );
 
   // set up database
   var request = indexedDB.open("elm-pwa-example-db");
@@ -46,7 +49,4 @@ function init() {
     var db = event.target.result;
     db.createObjectStore("posts", { autoIncrement: true });
   };
-
 }
-
-
