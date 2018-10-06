@@ -12,6 +12,11 @@ handlers:
     upload: index.js
     secure: always
 
+  - url: /elm.js
+    static_files: build/elm.js
+    upload: build/elm.js
+    secure: always
+
   - url: /service-worker.js
     static_files: service-worker.js
     upload: service-worker.js
