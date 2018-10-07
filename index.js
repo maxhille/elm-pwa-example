@@ -47,6 +47,51 @@ function init() {
   };
   request.onupgradeneeded = function(event) {
     var db = event.target.result;
-    db.createObjectStore("posts", { autoIncrement: true });
+    db.createObjectStore("posts", {
+      autoIncrement: true
+    });
   };
+
+  // set up push
+  subscribePush()
+}
+
+subscribePush = () => {
+  fetch('vapid-public-key').then(function(response) {
+      response.arrayBuffer().then(function(buffer) {
+        var publicKey = new Uint8Array(buffer);
+        navigator.serviceWorker.ready.then(function(
+            serviceWorkerRegistration) {
+            serviceWorkerRegistration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: publicKey,
+              })
+              .then(function(subscription) {
+                var auth = base64ArrayBuffer(subscription.getKey(
+                  'auth'));
+                var p256dh = base64ArrayBuffer(subscription.getKey(
+                  'p256dh'));
+                var data = {
+                  "endpoint": subscription.endpoint,
+                  "auth": auth,
+                  "p256dh": p256dh,
+                }
+                fetch("subscription", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json; charset=utf-8",
+                  },
+                  body: JSON.stringify(data),
+                })
+              })
+          })
+          .catch(function(e) {
+            console.error('Unable to subscribe to push.',
+              e);
+          });
+      });
+    })
+    .catch(function(error) {
+      console.log('Looks like there was a problem: \n', error);
+    });
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -16,14 +17,15 @@ import (
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/urlfetch"
+	guser "google.golang.org/appengine/user"
 )
 
 var curve = elliptic.P256()
 
 type subscription struct {
-	Endpoint string
-	P256dh   []byte
-	Auth     []byte
+	Endpoint string `json:"endpoint"`
+	P256dh   []byte `json:"p256dh"`
+	Auth     []byte `json:"auth"`
 }
 
 type keyPair struct {
@@ -32,8 +34,13 @@ type keyPair struct {
 	D []byte
 }
 
-// GetPublicKey handles a key request
-func GetPublicKey(w http.ResponseWriter, req *http.Request) {
+type user struct {
+	Key   *datastore.Key
+	Email string
+	Name  string
+}
+
+func getPublicKey(w http.ResponseWriter, req *http.Request) {
 	ctx := appengine.NewContext(req)
 
 	kk := datastore.NewKey(ctx, "KeyPair", "vapid-keypair", 0, nil)
@@ -68,6 +75,57 @@ func GetPublicKey(w http.ResponseWriter, req *http.Request) {
 
 	bs := k.publicKey()
 	w.Write(bs)
+}
+
+func putSubscription(w http.ResponseWriter, req *http.Request) {
+	ctx := appengine.NewContext(req)
+	u, err := getUser(ctx)
+	if err != nil {
+		msg := fmt.Sprintf("could not get user (%v)", err)
+		w.Write([]byte(msg))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	decoder := json.NewDecoder(req.Body)
+	s := subscription{}
+	err = decoder.Decode(&s)
+	if err != nil {
+		msg := fmt.Sprintf("could not read json body key (%v)", err)
+		w.Write([]byte(msg))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	sk := datastore.NewIncompleteKey(ctx, "Subscription", u.Key)
+	_, err = datastore.Put(ctx, sk, &s)
+	if err != nil {
+		msg := fmt.Sprintf("could not save subscription (%v)", err)
+		w.Write([]byte(msg))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func getUser(ctx context.Context) (*user, error) {
+	gu := guser.Current(ctx)
+
+	uk := datastore.NewKey(ctx, "User", gu.Email, 0, nil)
+	u := user{}
+	err := datastore.Get(ctx, uk, &u)
+	if err == datastore.ErrNoSuchEntity {
+		u.Email = gu.Email
+		u.Key = uk
+		u.Name = gu.String()
+		_, err2 := datastore.Put(ctx, uk, &u)
+		if err2 != nil {
+			return nil, err2
+		}
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &u, nil
 }
 
 func (k keyPair) publicKey() []byte {

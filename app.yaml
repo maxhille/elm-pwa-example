@@ -6,10 +6,16 @@ handlers:
     static_files: index.html
     upload: index.html
     secure: always
+    login: required
 
   - url: /index.js
     static_files: index.js
     upload: index.js
+    secure: always
+
+  - url: /base64ArrayBuffer.js
+    static_files: base64ArrayBuffer.js
+    upload: base64ArrayBuffer.js
     secure: always
 
   - url: /elm.js
@@ -22,6 +28,7 @@ handlers:
     upload: service-worker.js
     secure: always
 
-  - url: /vapid-public-key
+  - url: /.*
+    login: required
     secure: always
     script: app.go
