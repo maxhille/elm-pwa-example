@@ -43,12 +43,18 @@ func GetPublicKey(w http.ResponseWriter, req *http.Request) {
 	// no key yet? let's build it now
 	if err == datastore.ErrNoSuchEntity {
 		key, err2 := ecdsa.GenerateKey(curve, rand.Reader)
+		if err2 != nil {
+			msg := fmt.Sprintf("could not generate key (%v)", err2)
+			w.Write([]byte(msg))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		k.X = key.PublicKey.X.Bytes()
 		k.Y = key.PublicKey.Y.Bytes()
 		k.D = key.D.Bytes()
-		datastore.Put(ctx, kk, &k)
+		_, err2 = datastore.Put(ctx, kk, &k)
 		if err2 != nil {
-			msg := fmt.Sprintf("could not generade key (%v)", err2)
+			msg := fmt.Sprintf("could not put key (%v)", err2)
 			w.Write([]byte(msg))
 			w.WriteHeader(http.StatusInternalServerError)
 			return

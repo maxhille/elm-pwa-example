@@ -21,3 +21,7 @@ handlers:
     static_files: service-worker.js
     upload: service-worker.js
     secure: always
+
+  - url: /vapid-public-key
+    secure: always
+    script: app.go
