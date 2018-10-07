@@ -75,14 +75,14 @@ subscribePush = () => {
                   "endpoint": subscription.endpoint,
                   "auth": auth,
                   "p256dh": p256dh,
-                }
+                };
                 fetch("subscription", {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json; charset=utf-8",
                   },
                   body: JSON.stringify(data),
-                })
+                });
               })
           })
           .catch(function(e) {
