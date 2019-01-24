@@ -1,10 +1,10 @@
-var CACHE_NAME = 'elm-pwa-example-cache-v1';
+var CACHE_NAME = "elm-pwa-example-cache-v1";
 var urlsToCache = [
-  '/',
-  '/index.js',
-  '/elm.js',
-  '/base64ArrayBuffer.js',
-  '/vapid-public-key',
+  "/",
+  "/index.js",
+  "/elm.js",
+  "/base64ArrayBuffer.js",
+  "/vapid-public-key"
 ];
 var db;
 
@@ -23,21 +23,19 @@ request.onupgradeneeded = function(event) {
   });
 };
 
-self.addEventListener('install', function(event) {
+self.addEventListener("install", function(event) {
   // Perform install steps
   event.waitUntil(
-    caches.open(CACHE_NAME)
-    .then(function(cache) {
-      console.log('Opened cache');
+    caches.open(CACHE_NAME).then(function(cache) {
+      console.log("Opened cache");
       return cache.addAll(urlsToCache);
     })
   );
 });
 
-self.addEventListener('fetch', function(event) {
+self.addEventListener("fetch", function(event) {
   event.respondWith(
-    caches.match(event.request)
-    .then(function(response) {
+    caches.match(event.request).then(function(response) {
       // Cache hit - return response
       if (response) {
         return response;
@@ -47,20 +45,29 @@ self.addEventListener('fetch', function(event) {
   );
 });
 
-self.addEventListener('sync', function(event) {
-  console.log("sync");
-  return readPosts()
-});
-
-function readPosts() {
+self.addEventListener("sync", function(event) {
   var objectStore = db.transaction("posts").objectStore("posts");
   return adaptStoreToPromise(objectStore.getAll()).then(function(event) {
     var result = event.target.result;
     var toSync = result.filter(r => r.sync == "PENDING");
     console.log("read from db", toSync);
-    return forEachPromise(toSync, syncPost)
+    return forEachPromise(toSync, syncPost);
   });
-}
+});
+
+self.addEventListener('push', function(event) {
+  console.log('[Service Worker] Push Received.');
+  console.log(`[Service Worker] Push had this data: "${event.data.text()}"`);
+
+  const title = 'Push Codelab';
+  const options = {
+    body: 'Yay it works.',
+    icon: 'images/icon.png',
+    badge: 'images/badge.png'
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
 
 function adaptStoreToPromise(idbRequest) {
   return new Promise(function(resolve, reject) {
@@ -75,26 +82,29 @@ function adaptStoreToPromise(idbRequest) {
 
 function syncPost(post) {
   console.log("posting", post);
-  return fetch("posts", {
+  return fetch("api/post", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json; charset=utf-8",
+      "Content-Type": "application/json; charset=utf-8"
     },
-    body: JSON.stringify(post),
+    body: JSON.stringify(post)
+  }).then(function(response) {
+    var objectStore = db.transaction("posts").objectStore("posts");
   });
 }
 
-self.addEventListener('message', function(event) {
-  var postsObjectStore = db.transaction("posts", "readwrite").objectStore(
-    "posts");
+self.addEventListener("message", function(event) {
+  var postsObjectStore = db
+    .transaction("posts", "readwrite")
+    .objectStore("posts");
   var post = event.data;
-  post["sync"] = "PENDING"
+  post["sync"] = "PENDING";
   var request = postsObjectStore.add(post);
   request.onsuccess = function(event) {
     self.clients.matchAll().then(clients => {
       clients.forEach(client => client.postMessage("update-db"));
     });
-    self.registration.sync.register("sync-posts")
+    self.registration.sync.register("sync-posts");
   };
 });
 
