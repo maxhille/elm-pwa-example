@@ -46,7 +46,7 @@ function init() {
   request.onupgradeneeded = function(event) {
     var db = event.target.result;
     db.createObjectStore("posts", {
-      keyPath: ["id"]
+      keyPath: "id"
     });
   };
 

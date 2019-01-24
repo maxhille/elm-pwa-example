@@ -17,7 +17,9 @@ type alias Model =
 
 
 type alias Post =
-    { text : String }
+    { text : String
+    , sync : String
+    }
 
 
 type Msg
@@ -51,7 +53,17 @@ view model =
 
 viewPost : Post -> Html Msg
 viewPost post =
-    Html.li [] [ text post.text ]
+    Html.li []
+        [ text post.text
+        , text
+            (case post.sync of
+                "PENDING" ->
+                    " ⌛"
+
+                _ ->
+                    " ✅ "
+            )
+        ]
 
 
 init : () -> ( Model, Cmd Msg )

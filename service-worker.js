@@ -19,7 +19,7 @@ request.onsuccess = function(event) {
 request.onupgradeneeded = function(event) {
   var db = event.target.result;
   db.createObjectStore("posts", {
-    autoIncrement: true
+    keyPath: "id"
   });
 };
 
@@ -55,16 +55,14 @@ self.addEventListener("sync", function(event) {
   });
 });
 
-self.addEventListener('push', function(event) {
-  console.log('[Service Worker] Push Received.');
-  console.log(`[Service Worker] Push had this data: "${event.data.text()}"`);
+self.addEventListener("push", function(event) {
+  console.log("[Service Worker] Push Received.");
 
-  const title = 'Push Codelab';
+  const title = "Push Codelab";
   const options = {
-    body: 'Yay it works.',
-    icon: 'images/icon.png',
-    badge: 'images/badge.png'
+    body: "Yay it works."
   };
+  var syncAndNotify = sync.then(notify)
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
@@ -89,7 +87,24 @@ function syncPost(post) {
     },
     body: JSON.stringify(post)
   }).then(function(response) {
-    var objectStore = db.transaction("posts").objectStore("posts");
+    response.json().then(function(json) {
+      var deleteReq = db
+        .transaction("posts", "readwrite")
+        .objectStore("posts")
+        .delete(post.id);
+      deleteReq.onsuccess = function() {
+        json["sync"] = "SYNCED";
+        var insertReq = db
+          .transaction("posts", "readwrite")
+          .objectStore("posts")
+          .add(json);
+        insertReq.onsuccess = function() {
+          self.clients.matchAll().then(clients => {
+            clients.forEach(client => client.postMessage("update-db"));
+          });
+        };
+      };
+    });
   });
 }
 
@@ -99,6 +114,7 @@ self.addEventListener("message", function(event) {
     .objectStore("posts");
   var post = event.data;
   post["sync"] = "PENDING";
+  post["id"] = uuidv4();
   var request = postsObjectStore.add(post);
   request.onsuccess = function(event) {
     self.clients.matchAll().then(clients => {
@@ -120,4 +136,14 @@ function forEachPromise(items, fn) {
       return fn(item);
     });
   }, Promise.resolve());
+}
+
+// https://stackoverflow.com/a/2117523/470509
+function uuidv4() {
+  return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+    (
+      c ^
+      (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
+    ).toString(16)
+  );
 }
