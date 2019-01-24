@@ -3,8 +3,6 @@ var db;
 function post(text) {
   var post = {
     text: text,
-    me: true,
-    author: null
   };
   navigator.serviceWorker.controller.postMessage(post);
 }
@@ -48,7 +46,7 @@ function init() {
   request.onupgradeneeded = function(event) {
     var db = event.target.result;
     db.createObjectStore("posts", {
-      autoIncrement: true
+      keyPath: ["id"]
     });
   };
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -36,6 +37,10 @@ type subscription struct {
 }
 
 type post struct {
+	Id     string    `json:"id" datastore:-`
+	Author string    `json:"author"`
+	Text   string    `json:"text"`
+	Time   time.Time `json:"time"`
 }
 
 type keyPair struct {
@@ -121,7 +126,7 @@ func putSubscription(w http.ResponseWriter, req *http.Request) {
 
 func putPost(w http.ResponseWriter, req *http.Request) {
 	ctx := appengine.NewContext(req)
-	_, err := getUser(ctx)
+	u, err := getUser(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get user (%v)", err)
 		w.Write([]byte(msg))
@@ -130,7 +135,10 @@ func putPost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	decoder := json.NewDecoder(req.Body)
-	p := post{}
+	p := post{
+		Author: u.Name,
+		Time:   time.Now(),
+	}
 	err = decoder.Decode(&p)
 	if err != nil {
 		msg := fmt.Sprintf("could not read json body key (%v)", err)
@@ -139,15 +147,26 @@ func putPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	ck := datastore.NewKey(ctx, "Channel", "channel-1", 0, nil)
-	pk := datastore.NewIncompleteKey(ctx, "Post", ck)
-	_, err = datastore.Put(ctx, pk, &p)
+	pik := datastore.NewIncompleteKey(ctx, "Post", nil)
+	pk, err := datastore.Put(ctx, pik, &p)
 	if err != nil {
 		msg := fmt.Sprintf("could not save post (%v)", err)
 		w.Write([]byte(msg))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	p.Id = pk.Encode()
+
+	json, err := json.Marshal(&p)
+	if err != nil {
+		msg := fmt.Sprintf("could not marshal post (%v)", err)
+		w.Write([]byte(msg))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Write(json)
+	w.WriteHeader(http.StatusCreated)
+
 	// send push
 	task.Call(ctx, "")
 }
