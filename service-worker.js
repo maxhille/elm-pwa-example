@@ -45,7 +45,9 @@ self.addEventListener("fetch", function(event) {
   );
 });
 
-self.addEventListener("sync", function(event) {
+self.addEventListener("sync", sync);
+
+function sync() {
   var objectStore = db.transaction("posts").objectStore("posts");
   return adaptStoreToPromise(objectStore.getAll()).then(function(event) {
     var result = event.target.result;
@@ -53,19 +55,23 @@ self.addEventListener("sync", function(event) {
     console.log("read from db", toSync);
     return forEachPromise(toSync, syncPost);
   });
-});
+}
 
 self.addEventListener("push", function(event) {
   console.log("[Service Worker] Push Received.");
 
+  var syncAndNotify = sync().then(notify());
+
+  event.waitUntil(syncAndNotify);
+});
+
+function notify() {
   const title = "Push Codelab";
   const options = {
     body: "Yay it works."
   };
-  var syncAndNotify = sync.then(notify)
-
-  event.waitUntil(self.registration.showNotification(title, options));
-});
+  self.registration.showNotification(title, options);
+}
 
 function adaptStoreToPromise(idbRequest) {
   return new Promise(function(resolve, reject) {

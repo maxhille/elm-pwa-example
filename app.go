@@ -114,6 +114,7 @@ func putSubscription(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// TODO make this idempotent. either check for existence or use auth/p256dh as key
 	sk := datastore.NewIncompleteKey(ctx, "Subscription", u.Key)
 	_, err = datastore.Put(ctx, sk, &s)
 	if err != nil {

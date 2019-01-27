@@ -2,7 +2,7 @@ var db;
 
 function post(text) {
   var post = {
-    text: text,
+    text: text
   };
   navigator.serviceWorker.controller.postMessage(post);
 }
@@ -51,7 +51,15 @@ function init() {
   };
 
   // set up push
-  subscribePush();
+  navigator.serviceWorker.ready.then(function(swRegistration) {
+    swRegistration.pushManager.getSubscription().then(function(subscription) {
+      isSubscribed = !(subscription === null);
+
+      if (!isSubscribed) {
+        subscribePush();
+      }
+    });
+  });
 }
 
 subscribePush = () => {
