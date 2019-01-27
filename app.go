@@ -26,6 +26,7 @@ func init() {
 	http.HandleFunc("/vapid-public-key", getPublicKey)
 	http.HandleFunc("/api/subscription", putSubscription)
 	http.HandleFunc("/api/post", putPost)
+	http.HandleFunc("/api/posts", getPosts)
 }
 
 var curve = elliptic.P256()
@@ -37,7 +38,7 @@ type subscription struct {
 }
 
 type post struct {
-	Id     string    `json:"id" datastore:-`
+	Id     string    `json:"id" datastore:"-"`
 	Author string    `json:"author"`
 	Text   string    `json:"text"`
 	Time   time.Time `json:"time"`
@@ -123,6 +124,33 @@ func putSubscription(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+}
+
+func getPosts(w http.ResponseWriter, req *http.Request) {
+	ctx := appengine.NewContext(req)
+	ps := []post{}
+	pks, err := datastore.NewQuery("Post").
+		GetAll(ctx, &ps)
+	if err != nil {
+		msg := fmt.Sprintf("could not get posts from db: %v", err)
+		w.Write([]byte(msg))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	for i, _ := range ps {
+		ps[i].Id = pks[i].Encode()
+	}
+
+	json, err := json.Marshal(&ps)
+	if err != nil {
+		msg := fmt.Sprintf("could not marshal posts (%v)", err)
+		w.Write([]byte(msg))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(json)
 }
 
 func putPost(w http.ResponseWriter, req *http.Request) {

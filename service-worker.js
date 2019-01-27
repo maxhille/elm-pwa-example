@@ -49,20 +49,38 @@ self.addEventListener("sync", sync);
 
 function sync() {
   var objectStore = db.transaction("posts").objectStore("posts");
-  return adaptStoreToPromise(objectStore.getAll()).then(function(event) {
-    var result = event.target.result;
-    var toSync = result.filter(r => r.sync == "PENDING");
-    console.log("read from db", toSync);
-    return forEachPromise(toSync, syncPost);
-  });
+  return adaptStoreToPromise(objectStore.getAll())
+    .then(function(event) {
+      var result = event.target.result;
+      var toSync = result.filter(r => r.sync == "PENDING");
+      console.log("read from db", toSync);
+      return forEachPromise(toSync, syncPost);
+    })
+    .then(
+      fetch("api/posts")
+        .then(response => response.json())
+        .then(function(posts) {
+          var transaction = db.transaction("posts", "readwrite");
+          var store = transaction.objectStore("posts");
+          return Promise.all(
+            posts.map(post => {
+              post["sync"] = "SYNCED";
+              return store.put(post);
+            })
+          ).then(function() {
+            return transaction.complete;
+          }).then(function() {
+	    notifyClients();
+	  });
+        })
+    );
 }
 
 self.addEventListener("push", function(event) {
   console.log("[Service Worker] Push Received.");
 
   var syncAndNotify = sync().then(notify());
-
-  event.waitUntil(syncAndNotify);
+event.waitUntil(syncAndNotify);
 });
 
 function notify() {
@@ -85,7 +103,6 @@ function adaptStoreToPromise(idbRequest) {
 }
 
 function syncPost(post) {
-  console.log("posting", post);
   return fetch("api/post", {
     method: "POST",
     headers: {
@@ -104,14 +121,16 @@ function syncPost(post) {
           .transaction("posts", "readwrite")
           .objectStore("posts")
           .add(json);
-        insertReq.onsuccess = function() {
-          self.clients.matchAll().then(clients => {
-            clients.forEach(client => client.postMessage("update-db"));
-          });
-        };
+        insertReq.onsuccess = notifyClients;
       };
     });
   });
+}
+
+function notifyClients() {
+          self.clients.matchAll().then(clients => {
+            clients.forEach(client => client.postMessage("update-db"));
+          });
 }
 
 self.addEventListener("message", function(event) {
