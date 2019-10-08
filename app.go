@@ -1,4 +1,4 @@
-package app
+package main
 
 import (
 	"crypto/ecdsa"
@@ -21,6 +21,18 @@ import (
 	"google.golang.org/appengine/urlfetch"
 	guser "google.golang.org/appengine/user"
 )
+
+func main() {
+  // port := os.Getenv("PORT")
+  // if port == "" {
+  //   port = "8080"
+  //   fmt.Printf("Defaulting to port %s", port)
+  // }
+
+  // fmt.Printf("Listening on port %s", port)
+  // http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
+        appengine.Main()
+}
 
 func init() {
 	http.HandleFunc("/vapid-public-key", getPublicKey)
@@ -306,7 +318,7 @@ func notify(ctx context.Context, uk *datastore.Key) error {
 		return err
 	}
 
-	log.Infof(ctx, "notifying %d users", len(ss))
+	log.Infof(ctx, "notifying 1 user on %d subscriptions", len(ss))
 
 	// send pushes to each sub
 	for _, s := range ss {
@@ -317,11 +329,12 @@ func notify(ctx context.Context, uk *datastore.Key) error {
 		ws.Keys.P256dh = base64.RawURLEncoding.EncodeToString(s.P256dh)
 
 		// Send Notification
-		_, err = webpush.SendNotification([]byte("msg-sync"), &ws, &webpush.Options{
+		res, err := webpush.SendNotification([]byte("msg-sync"), &ws, &webpush.Options{
 			Subscriber:      "<mh@lambdasoup.com>",
 			VAPIDPrivateKey: base64.RawURLEncoding.EncodeToString(prvk.D.Bytes()),
 			HTTPClient:      urlfetch.Client(ctx),
 		})
+                log.Infof(ctx, "%v", res)
 		if err != nil {
 			log.Warningf(ctx, "could not send notification: %v", err)
 		}

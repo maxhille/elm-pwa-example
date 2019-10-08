@@ -4,12 +4,16 @@ import Browser
 import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events as HE
+import IndexedDB
 
 
 port postMessage : String -> Cmd msg
 
 
 port updatePosts : (List Post -> msg) -> Sub msg
+
+
+port refreshPosts : () -> Cmd msg
 
 
 type alias Model =
@@ -26,6 +30,7 @@ type Msg
     = TextChanged String
     | SendAndClear
     | PostsChanged (List Post)
+    | DBInitialized
 
 
 main =
@@ -68,12 +73,15 @@ viewPost post =
 
 init : () -> ( Model, Cmd Msg )
 init flags =
-    ( initialModel, Cmd.none )
+    ( initialModel, IndexedDB.open "elm-pwa-example-db" )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    updatePosts PostsChanged
+    Sub.batch
+        [ updatePosts PostsChanged
+        , IndexedDB.subscriptions DBInitialized
+        ]
 
 
 initialModel : Model
@@ -92,3 +100,6 @@ update msg model =
 
         PostsChanged newPosts ->
             ( { model | posts = newPosts }, Cmd.none )
+
+        DBInitialized ->
+            ( model, refreshPosts () )
