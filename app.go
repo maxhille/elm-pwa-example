@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"time"
@@ -17,20 +18,19 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/delay"
-	"google.golang.org/appengine/log"
 	guser "google.golang.org/appengine/user"
 )
 
 func main() {
-  // port := os.Getenv("PORT")
-  // if port == "" {
-  //   port = "8080"
-  //   fmt.Printf("Defaulting to port %s", port)
-  // }
+	// port := os.Getenv("PORT")
+	// if port == "" {
+	//   port = "8080"
+	//   fmt.Printf("Defaulting to port %s", port)
+	// }
 
-  // fmt.Printf("Listening on port %s", port)
-  // http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
-        appengine.Main()
+	// fmt.Printf("Listening on port %s", port)
+	// http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
+	appengine.Main()
 }
 
 func init() {
@@ -269,7 +269,7 @@ func sendTestMessageTo(ctx context.Context, ep string, auth []byte, p256dh []byt
 		VAPIDPrivateKey: base64.RawURLEncoding.EncodeToString(prvk.D.Bytes()),
 	})
 	if err != nil {
-		log.Errorf(ctx, "could not send notification: %v", err)
+		log.Printf("could not send notification: %v", err)
 	}
 }
 
@@ -278,14 +278,14 @@ func notifyAll(ctx context.Context, _ string) error {
 		KeysOnly().
 		GetAll(ctx, nil)
 	if err != nil {
-		log.Errorf(ctx, "could not notify users: %v", err)
+		log.Printf("could not notify users: %v", err)
 		return err
 	}
 
 	for _, uk := range uks {
 		err = notify(ctx, uk)
 		if err != nil {
-			log.Errorf(ctx, "could not notify user %v: %v", uk, err)
+			log.Printf("could not notify user %v: %v", uk, err)
 		}
 	}
 	return nil
@@ -316,7 +316,7 @@ func notify(ctx context.Context, uk *datastore.Key) error {
 		return err
 	}
 
-	log.Infof(ctx, "notifying 1 user on %d subscriptions", len(ss))
+	log.Printf("notifying 1 user on %d subscriptions", len(ss))
 
 	// send pushes to each sub
 	for _, s := range ss {
@@ -331,9 +331,9 @@ func notify(ctx context.Context, uk *datastore.Key) error {
 			Subscriber:      "<mh@lambdasoup.com>",
 			VAPIDPrivateKey: base64.RawURLEncoding.EncodeToString(prvk.D.Bytes()),
 		})
-                log.Infof(ctx, "%v", res)
+		log.Printf("%v", res)
 		if err != nil {
-			log.Warningf(ctx, "could not send notification: %v", err)
+			log.Printf("could not send notification: %v", err)
 		}
 	}
 
