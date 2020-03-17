@@ -18,7 +18,6 @@ import (
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/delay"
 	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/urlfetch"
 	guser "google.golang.org/appengine/user"
 )
 
@@ -268,7 +267,6 @@ func sendTestMessageTo(ctx context.Context, ep string, auth []byte, p256dh []byt
 	_, err := webpush.SendNotification([]byte("TestXYZ"), &s, &webpush.Options{
 		Subscriber:      "<mh@lambdasoup.com>",
 		VAPIDPrivateKey: base64.RawURLEncoding.EncodeToString(prvk.D.Bytes()),
-		HTTPClient:      urlfetch.Client(ctx),
 	})
 	if err != nil {
 		log.Errorf(ctx, "could not send notification: %v", err)
@@ -332,7 +330,6 @@ func notify(ctx context.Context, uk *datastore.Key) error {
 		res, err := webpush.SendNotification([]byte("msg-sync"), &ws, &webpush.Options{
 			Subscriber:      "<mh@lambdasoup.com>",
 			VAPIDPrivateKey: base64.RawURLEncoding.EncodeToString(prvk.D.Bytes()),
-			HTTPClient:      urlfetch.Client(ctx),
 		})
                 log.Infof(ctx, "%v", res)
 		if err != nil {
