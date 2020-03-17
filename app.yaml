@@ -14,6 +14,12 @@ handlers:
     secure: always
     login: required
 
+  - url: /favicon.ico
+    static_files: favicon.ico
+    upload: favicon.ico
+    secure: always
+    login: required
+
   - url: /base64ArrayBuffer.js
     static_files: base64ArrayBuffer.js
     upload: base64ArrayBuffer.js
