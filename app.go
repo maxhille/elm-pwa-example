@@ -15,10 +15,11 @@ import (
 
 	"golang.org/x/net/context"
 
+	cloudtasks "cloud.google.com/go/cloudtasks/apiv2beta3"
 	"cloud.google.com/go/datastore"
 	webpush "github.com/SherClockHolmes/webpush-go"
-	"google.golang.org/appengine/delay"
 	guser "google.golang.org/appengine/user"
+	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2beta3"
 )
 
 func main() {
@@ -90,8 +91,6 @@ type user struct {
 	Email string
 	Name  string
 }
-
-var task = delay.Func("notify-all", notifyAll)
 
 func getPublicKey(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
@@ -225,6 +224,14 @@ func putPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	ctc, err := cloudtasks.NewClient(ctx)
+	if err != nil {
+		msg := fmt.Sprintf("could not create cloud tasks client (%v)", err)
+		w.Write([]byte(msg))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	u, err := getUser(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get user (%v)", err)
@@ -267,7 +274,11 @@ func putPost(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 
 	// send push
-	task.Call(ctx, "")
+	treq := &taskspb.CreateTaskRequest{
+		// TODO complete, was
+		// delay.Func("notify-all", notifyAll)
+	}
+	_, _ = ctc.CreateTask(ctx, treq)
 }
 
 func getUser(ctx context.Context) (*user, error) {
