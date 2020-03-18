@@ -10,34 +10,58 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"os"
 	"time"
 
 	"golang.org/x/net/context"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
-	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/delay"
 	guser "google.golang.org/appengine/user"
 )
 
 func main() {
-	// port := os.Getenv("PORT")
-	// if port == "" {
-	//   port = "8080"
-	//   fmt.Printf("Defaulting to port %s", port)
-	// }
+	// for local dev, should be overridden by appengine file serving
+	http.Handle("/", http.FileServer(newPublicFileSystem()))
 
-	// fmt.Printf("Listening on port %s", port)
-	// http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
-	appengine.Main()
-}
-
-func init() {
 	http.HandleFunc("/vapid-public-key", getPublicKey)
 	http.HandleFunc("/api/subscription", putSubscription)
 	http.HandleFunc("/api/post", putPost)
 	http.HandleFunc("/api/posts", getPosts)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+		log.Printf("Defaulting to port %s", port)
+	}
+
+	log.Printf("Listening on port %s", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		log.Fatal(err)
+	}
+
+}
+
+type publicFileSystem struct {
+	base  http.Dir
+	build http.Dir
+}
+
+func (fs *publicFileSystem) Open(name string) (http.File, error) {
+	log.Printf("serve file: %v", name)
+	if name == "/elm.js" {
+		return fs.build.Open(name)
+	}
+
+	return fs.base.Open(name)
+}
+
+func newPublicFileSystem() *publicFileSystem {
+	return &publicFileSystem{
+		base:  http.Dir("./"),
+		build: http.Dir("./build"),
+	}
 }
 
 var curve = elliptic.P256()
@@ -70,7 +94,7 @@ type user struct {
 var task = delay.Func("notify-all", notifyAll)
 
 func getPublicKey(w http.ResponseWriter, req *http.Request) {
-	ctx := appengine.NewContext(req)
+	ctx := req.Context()
 
 	kk := datastore.NewKey(ctx, "KeyPair", "vapid-keypair", 0, nil)
 	k := keyPair{}
@@ -107,7 +131,7 @@ func getPublicKey(w http.ResponseWriter, req *http.Request) {
 }
 
 func putSubscription(w http.ResponseWriter, req *http.Request) {
-	ctx := appengine.NewContext(req)
+	ctx := req.Context()
 	u, err := getUser(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get user (%v)", err)
@@ -138,7 +162,7 @@ func putSubscription(w http.ResponseWriter, req *http.Request) {
 }
 
 func getPosts(w http.ResponseWriter, req *http.Request) {
-	ctx := appengine.NewContext(req)
+	ctx := req.Context()
 	ps := []post{}
 	pks, err := datastore.NewQuery("Post").
 		GetAll(ctx, &ps)
@@ -165,7 +189,7 @@ func getPosts(w http.ResponseWriter, req *http.Request) {
 }
 
 func putPost(w http.ResponseWriter, req *http.Request) {
-	ctx := appengine.NewContext(req)
+	ctx := req.Context()
 	u, err := getUser(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get user (%v)", err)
