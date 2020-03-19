@@ -98,8 +98,8 @@ func getPublicKey(w http.ResponseWriter, req *http.Request) {
 	dsc, err := datastore.NewClient(ctx, "my-project")
 	if err != nil {
 		msg := fmt.Sprintf("could not create datastore client (%v)", err)
-		w.Write([]byte(msg))
 		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(msg))
 		return
 	}
 
@@ -112,8 +112,8 @@ func getPublicKey(w http.ResponseWriter, req *http.Request) {
 		key, err2 := ecdsa.GenerateKey(curve, rand.Reader)
 		if err2 != nil {
 			msg := fmt.Sprintf("could not generate key (%v)", err2)
-			w.Write([]byte(msg))
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(msg))
 			return
 		}
 		k.X = key.PublicKey.X.Bytes()
@@ -122,14 +122,14 @@ func getPublicKey(w http.ResponseWriter, req *http.Request) {
 		_, err2 = dsc.Put(ctx, kk, &k)
 		if err2 != nil {
 			msg := fmt.Sprintf("could not put key (%v)", err2)
-			w.Write([]byte(msg))
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(msg))
 			return
 		}
 	} else if err != nil {
 		msg := fmt.Sprintf("could not load key (%v)", err)
-		w.Write([]byte(msg))
 		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(msg))
 		return
 	}
 
