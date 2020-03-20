@@ -94,7 +94,19 @@ func (lh *LocalHandler) ListenAndServe(port string,
 }
 
 type LocalDB struct {
-	app.DB
+	keyPair *app.KeyPair
+}
+
+func (db *LocalDB) GetKey(ctx context.Context) (app.KeyPair, error) {
+	if db.keyPair == nil {
+		return app.KeyPair{}, app.ErrNoSuchEntity
+	}
+	return *db.keyPair, nil
+}
+
+func (db *LocalDB) PutKey(ctx context.Context, k app.KeyPair) error {
+	db.keyPair = &k
+	return nil
 }
 
 func (db *LocalDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
@@ -103,6 +115,11 @@ func (db *LocalDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
 	return app.User{}, nil
 }
 
+func (db *LocalDB) GetUsers(ctx context.Context) ([]app.User,
+	error) {
+	// TODO implement
+	return nil, nil
+}
 func (db *LocalDB) PutUser(ctx context.Context, u app.User) error {
 	// TODO implement
 	return nil
