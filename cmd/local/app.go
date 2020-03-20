@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// for local dev
-	http.Handle("/", http.FileServer(newPublicFileSystem()))
+	http.Handle("/", LoggingHandler{http.FileServer(newPublicFileSystem())})
 
 	srv := server.New(
 		&LocalDB{},
@@ -26,13 +26,40 @@ func main() {
 
 }
 
+type LoggingHandler struct {
+	handler http.Handler
+}
+
+func (lh LoggingHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	lrw := &loggingResponseWriter{rw: rw}
+	lh.handler.ServeHTTP(lrw, req)
+	log.Printf("%v %v %v", lrw.code, req.Method, req.URL)
+}
+
+type loggingResponseWriter struct {
+	code int
+	rw   http.ResponseWriter
+}
+
+func (lrw *loggingResponseWriter) Header() http.Header {
+	return lrw.rw.Header()
+}
+
+func (lrw *loggingResponseWriter) Write(bs []byte) (int, error) {
+	return lrw.rw.Write(bs)
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.code = code
+	lrw.rw.WriteHeader(code)
+}
+
 type publicFileSystem struct {
 	base  http.Dir
 	build http.Dir
 }
 
 func (fs *publicFileSystem) Open(name string) (http.File, error) {
-	log.Printf("serve file: %v", name)
 	if name == "/elm.js" {
 		return fs.build.Open(name)
 	}
@@ -52,8 +79,12 @@ type LocalHandler struct {
 
 func (lh *LocalHandler) HandleFunc(pattern string,
 	handler func(http.ResponseWriter, *http.Request)) {
-	log.Printf("handle %v", pattern)
-	http.HandleFunc(pattern, handler)
+	logHandler := func(rw http.ResponseWriter, req *http.Request) {
+		lrw := &loggingResponseWriter{rw: rw}
+		handler(lrw, req)
+		log.Printf("%v %v %v", lrw.code, req.Method, req.URL)
+	}
+	http.HandleFunc(pattern, logHandler)
 }
 
 func (lh *LocalHandler) ListenAndServe(port string,
