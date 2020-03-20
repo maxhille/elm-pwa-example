@@ -17,9 +17,9 @@ func main() {
 		&LocalDB{},
 		&LocalTasks{},
 		&LocalAuth{},
+		&LocalHandler{},
 	)
 
-	log.Print("Listening on port 8080")
 	if err := srv.Run("8080"); err != nil {
 		log.Fatal(err)
 	}
@@ -45,6 +45,21 @@ func newPublicFileSystem() *publicFileSystem {
 		base:  http.Dir("./"),
 		build: http.Dir("./build"),
 	}
+}
+
+type LocalHandler struct {
+}
+
+func (lh *LocalHandler) HandleFunc(pattern string,
+	handler func(http.ResponseWriter, *http.Request)) {
+	log.Printf("handle %v", pattern)
+	http.HandleFunc(pattern, handler)
+}
+
+func (lh *LocalHandler) ListenAndServe(port string,
+	handler http.Handler) error {
+	log.Printf("app available at http://localhost%v", port)
+	return http.ListenAndServe(port, handler)
 }
 
 type LocalDB struct {

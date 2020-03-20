@@ -42,6 +42,7 @@ type Server struct {
 	db    DB
 	tasks Tasks
 	auth  Auth
+	http  HttpHandler
 }
 
 type User struct {
@@ -49,17 +50,17 @@ type User struct {
 	Name string
 }
 
-func New(db DB, tasks Tasks, auth Auth) Server {
-	return Server{db, tasks, auth}
+func New(db DB, tasks Tasks, auth Auth, handler HttpHandler) Server {
+	return Server{db, tasks, auth, handler}
 }
 
 func (srv *Server) Run(port string) error {
-	http.HandleFunc("/vapid-public-key", srv.getPublicKey)
-	http.HandleFunc("/api/subscription", srv.putSubscription)
-	http.HandleFunc("/api/post", srv.putPost)
-	http.HandleFunc("/api/posts", srv.getPosts)
+	srv.http.HandleFunc("/vapid-public-key", srv.getPublicKey)
+	srv.http.HandleFunc("/api/subscription", srv.putSubscription)
+	srv.http.HandleFunc("/api/post", srv.putPost)
+	srv.http.HandleFunc("/api/posts", srv.getPosts)
 
-	return http.ListenAndServe(":"+port, nil)
+	return srv.http.ListenAndServe(":"+port, nil)
 }
 
 func (srv *Server) getPublicKey(w http.ResponseWriter, req *http.Request) {
