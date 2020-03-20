@@ -1,4 +1,4 @@
-package server
+package app
 
 import (
 	"context"
@@ -38,7 +38,7 @@ type KeyPair struct {
 	D []byte
 }
 
-type Server struct {
+type App struct {
 	db    DB
 	tasks Tasks
 	auth  Auth
@@ -50,23 +50,23 @@ type User struct {
 	Name string
 }
 
-func New(db DB, tasks Tasks, auth Auth, handler HttpHandler) Server {
-	return Server{db, tasks, auth, handler}
+func New(db DB, tasks Tasks, auth Auth, handler HttpHandler) App {
+	return App{db, tasks, auth, handler}
 }
 
-func (srv *Server) Run(port string) error {
-	srv.http.HandleFunc("/vapid-public-key", srv.getPublicKey)
-	srv.http.HandleFunc("/api/subscription", srv.putSubscription)
-	srv.http.HandleFunc("/api/post", srv.putPost)
-	srv.http.HandleFunc("/api/posts", srv.getPosts)
+func (app *App) Run(port string) error {
+	app.http.HandleFunc("/vapid-public-key", app.getPublicKey)
+	app.http.HandleFunc("/api/subscription", app.putSubscription)
+	app.http.HandleFunc("/api/post", app.putPost)
+	app.http.HandleFunc("/api/posts", app.getPosts)
 
-	return srv.http.ListenAndServe(":"+port, nil)
+	return app.http.ListenAndServe(":"+port, nil)
 }
 
-func (srv *Server) getPublicKey(w http.ResponseWriter, req *http.Request) {
+func (app *App) getPublicKey(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	k, err := srv.db.GetKey(ctx)
+	k, err := app.db.GetKey(ctx)
 
 	// no key yet? let's build it now
 	if err == ErrNoSuchEntity {
@@ -80,7 +80,7 @@ func (srv *Server) getPublicKey(w http.ResponseWriter, req *http.Request) {
 		k.X = key.PublicKey.X.Bytes()
 		k.Y = key.PublicKey.Y.Bytes()
 		k.D = key.D.Bytes()
-		err2 = srv.db.PutKey(ctx, k)
+		err2 = app.db.PutKey(ctx, k)
 		if err2 != nil {
 			msg := fmt.Sprintf("could not put key (%v)", err2)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -98,10 +98,10 @@ func (srv *Server) getPublicKey(w http.ResponseWriter, req *http.Request) {
 	w.Write(bs)
 }
 
-func (srv *Server) putSubscription(w http.ResponseWriter, req *http.Request) {
+func (app *App) putSubscription(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	u, err := srv.getUser(ctx)
+	u, err := app.getUser(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get user (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -119,7 +119,7 @@ func (srv *Server) putSubscription(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = srv.db.PutSubscription(ctx, s, u)
+	err = app.db.PutSubscription(ctx, s, u)
 	if err != nil {
 		msg := fmt.Sprintf("could not save subscription (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -128,10 +128,10 @@ func (srv *Server) putSubscription(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (srv *Server) getPosts(w http.ResponseWriter, req *http.Request) {
+func (app *App) getPosts(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	ps, err := srv.db.GetPosts(ctx)
+	ps, err := app.db.GetPosts(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get posts from db: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -149,10 +149,10 @@ func (srv *Server) getPosts(w http.ResponseWriter, req *http.Request) {
 	w.Write(json)
 }
 
-func (srv *Server) putPost(w http.ResponseWriter, req *http.Request) {
+func (app *App) putPost(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	u, err := srv.getUser(ctx)
+	u, err := app.getUser(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get user (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -174,7 +174,7 @@ func (srv *Server) putPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = srv.db.PutPost(ctx, p)
+	err = app.db.PutPost(ctx, p)
 	if err != nil {
 		msg := fmt.Sprintf("could not save post (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -193,18 +193,18 @@ func (srv *Server) putPost(w http.ResponseWriter, req *http.Request) {
 	w.Write(json)
 
 	// send push
-	err = srv.tasks.Notify(ctx)
+	err = app.tasks.Notify(ctx)
 	if err != nil {
 		log.Printf("could not notify clients: %v", err)
 	}
 }
 
-func (srv *Server) getUser(ctx context.Context) (User, error) {
-	ru := srv.auth.Current(ctx)
+func (app *App) getUser(ctx context.Context) (User, error) {
+	ru := app.auth.Current(ctx)
 
-	u, err := srv.db.GetUser(ctx, ru.UUID)
+	u, err := app.db.GetUser(ctx, ru.UUID)
 	if err == ErrNoSuchEntity {
-		err2 := srv.db.PutUser(ctx, u)
+		err2 := app.db.PutUser(ctx, u)
 		if err2 != nil {
 			return User{}, err2
 		}
@@ -217,15 +217,15 @@ func (srv *Server) getUser(ctx context.Context) (User, error) {
 
 func (k KeyPair) publicKey() []byte {
 	// uncompressed pubkey format
-	bs := []byte{0x04}
+	bs := []byte{0x03}
 	bs = append(bs, k.X...)
 	bs = append(bs, k.Y...)
 	return bs
 }
 
-func (srv *Server) notifyAll(ctx context.Context, _ string) error {
+func (app *App) notifyAll(ctx context.Context, _ string) error {
 	// get server keys
-	k, err := srv.db.GetKey(ctx)
+	k, err := app.db.GetKey(ctx)
 	if err != nil {
 		return fmt.Errorf("could not get server key: %v", err)
 	}
@@ -242,7 +242,7 @@ func (srv *Server) notifyAll(ctx context.Context, _ string) error {
 	prvk.PublicKey.Y.SetBytes(k.Y)
 
 	// get user keys
-	ss, err := srv.db.GetSubscriptions(ctx)
+	ss, err := app.db.GetSubscriptions(ctx)
 	if err != nil {
 		return err
 	}

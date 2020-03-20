@@ -6,21 +6,21 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/maxhille/elm-pwa-example/server"
+	"github.com/maxhille/elm-pwa-example/app"
 )
 
 func main() {
 	// for local dev
 	http.Handle("/", LoggingHandler{http.FileServer(newPublicFileSystem())})
 
-	srv := server.New(
+	app := app.New(
 		&LocalDB{},
 		&LocalTasks{},
 		&LocalAuth{},
 		&LocalHandler{},
 	)
 
-	if err := srv.Run("8080"); err != nil {
+	if err := app.Run("8080"); err != nil {
 		log.Fatal(err)
 	}
 
@@ -94,48 +94,48 @@ func (lh *LocalHandler) ListenAndServe(port string,
 }
 
 type LocalDB struct {
-	server.DB
+	app.DB
 }
 
-func (db *LocalDB) GetUser(ctx context.Context, id uuid.UUID) (server.User,
+func (db *LocalDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
 	error) {
 	// TODO implement
-	return server.User{}, nil
+	return app.User{}, nil
 }
 
-func (db *LocalDB) PutUser(ctx context.Context, u server.User) error {
+func (db *LocalDB) PutUser(ctx context.Context, u app.User) error {
 	// TODO implement
 	return nil
 }
-func (db *LocalDB) PutSubscription(ctx context.Context, s server.Subscription,
-	u server.User) error {
+func (db *LocalDB) PutSubscription(ctx context.Context, s app.Subscription,
+	u app.User) error {
 	// TODO implement
 	return nil
 }
 
-func (db *LocalDB) GetSubscriptions(ctx context.Context) ([]server.Subscription,
+func (db *LocalDB) GetSubscriptions(ctx context.Context) ([]app.Subscription,
 	error) {
 	// TODO implement
-	return []server.Subscription{}, nil
+	return []app.Subscription{}, nil
 }
 
-func (db *LocalDB) GetPublicKey(ctx context.Context) (server.KeyPair, error) {
+func (db *LocalDB) GetPublicKey(ctx context.Context) (app.KeyPair, error) {
 	// TODO implement
-	return server.KeyPair{}, nil
+	return app.KeyPair{}, nil
 }
 
-func (db *LocalDB) GetPosts(ctx context.Context) ([]server.Post, error) {
+func (db *LocalDB) GetPosts(ctx context.Context) ([]app.Post, error) {
 	// TODO implement
-	return []server.Post{}, nil
+	return []app.Post{}, nil
 }
 
-func (db *LocalDB) PutPost(ctx context.Context, p server.Post) error {
+func (db *LocalDB) PutPost(ctx context.Context, p app.Post) error {
 	// TODO implement
 	return nil
 }
 
 type LocalTasks struct {
-	server.Tasks
+	app.Tasks
 }
 
 func (ct *LocalTasks) Notify(ctx context.Context) error {
@@ -144,11 +144,11 @@ func (ct *LocalTasks) Notify(ctx context.Context) error {
 }
 
 type LocalAuth struct {
-	server.Auth
+	app.Auth
 }
 
-func (ga *LocalAuth) Current(ctx context.Context) server.User {
+func (ga *LocalAuth) Current(ctx context.Context) app.User {
 	// TODO migrate somewhere new, was
 	//	return guser.Current(ctx)
-	return server.User{}
+	return app.User{}
 }
