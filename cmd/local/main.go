@@ -13,8 +13,15 @@ func main() {
 	// for local dev
 	http.Handle("/", LoggingHandler{http.FileServer(newPublicFileSystem())})
 
+	db := &LocalDB{
+		keyPair: &app.KeyPair{
+			PK: "BDRhEg7bDxxreAwuUgr2zzwx7_CzYZR1xr8Q2xIVJD8o8ida48HjWrZPLk1_QSw9aDzjtMf0vDvaBEQYaFmqGdo",
+			SK: "uIzZugiNNxVTW24JheKfCJ6fHwtKBGSPTCek-QOupjo",
+		},
+	}
+
 	app := app.New(
-		&LocalDB{},
+		db,
 		&LocalTasks{},
 		&LocalAuth{},
 		&LocalHandler{},

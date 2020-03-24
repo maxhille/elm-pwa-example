@@ -30,8 +30,8 @@ type Post struct {
 }
 
 type KeyPair struct {
-	pk string
-	sk string
+	PK string
+	SK string
 }
 
 type App struct {
@@ -64,7 +64,6 @@ func (app *App) getPublicKey(w http.ResponseWriter, req *http.Request) {
 
 	k, err := app.db.GetKey(ctx)
 
-	log.Printf("vapid key is: %v", k)
 	// no key yet? let's build it now
 	if err == ErrNoSuchEntity {
 		sk, pk, err2 := webpush.GenerateVAPIDKeys()
@@ -74,8 +73,8 @@ func (app *App) getPublicKey(w http.ResponseWriter, req *http.Request) {
 			w.Write([]byte(msg))
 			return
 		}
-		k.pk = pk
-		k.sk = sk
+		k.PK = pk
+		k.SK = sk
 		err2 = app.db.PutKey(ctx, k)
 		if err2 != nil {
 			msg := fmt.Sprintf("could not save VAPID keys (%v)", err)
@@ -85,7 +84,7 @@ func (app *App) getPublicKey(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	w.Write([]byte(k.pk))
+	w.Write([]byte(k.PK))
 }
 
 func (app *App) putSubscription(w http.ResponseWriter, req *http.Request) {
@@ -230,8 +229,8 @@ func (app *App) notifyAll(ctx context.Context, _ string) error {
 		// Send Notification
 		res, err := webpush.SendNotification([]byte("msg-sync"), &ws, &webpush.Options{
 			Subscriber:      "<mh@lambdasoup.com>",
-			VAPIDPrivateKey: k.sk,
-			VAPIDPublicKey:  k.pk,
+			VAPIDPrivateKey: k.SK,
+			VAPIDPublicKey:  k.PK,
 			TTL:             30,
 		})
 		log.Printf("%v", res)
