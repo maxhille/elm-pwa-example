@@ -2,14 +2,11 @@ package app
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/big"
 	"net/http"
 	"time"
 
@@ -33,9 +30,8 @@ type Post struct {
 }
 
 type KeyPair struct {
-	X []byte
-	Y []byte
-	D []byte
+	pk string
+	sk string
 }
 
 type App struct {
@@ -68,34 +64,28 @@ func (app *App) getPublicKey(w http.ResponseWriter, req *http.Request) {
 
 	k, err := app.db.GetKey(ctx)
 
+	log.Printf("vapid key is: %v", k)
 	// no key yet? let's build it now
 	if err == ErrNoSuchEntity {
-		key, err2 := ecdsa.GenerateKey(curve, rand.Reader)
+		sk, pk, err2 := webpush.GenerateVAPIDKeys()
 		if err2 != nil {
-			msg := fmt.Sprintf("could not generate key (%v)", err2)
+			msg := fmt.Sprintf("could not create VAPID keys (%v)", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(msg))
 			return
 		}
-		k.X = key.PublicKey.X.Bytes()
-		k.Y = key.PublicKey.Y.Bytes()
-		k.D = key.D.Bytes()
+		k.pk = pk
+		k.sk = sk
 		err2 = app.db.PutKey(ctx, k)
 		if err2 != nil {
-			msg := fmt.Sprintf("could not put key (%v)", err2)
+			msg := fmt.Sprintf("could not save VAPID keys (%v)", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(msg))
 			return
 		}
-	} else if err != nil {
-		msg := fmt.Sprintf("could not load key (%v)", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(msg))
-		return
 	}
 
-	bs := k.publicKey()
-	w.Write(bs)
+	w.Write([]byte(k.pk))
 }
 
 func (app *App) putSubscription(w http.ResponseWriter, req *http.Request) {
@@ -215,32 +205,12 @@ func (app *App) getUser(ctx context.Context) (User, error) {
 	return u, nil
 }
 
-func (k KeyPair) publicKey() []byte {
-	// uncompressed pubkey format
-	bs := []byte{0x03}
-	bs = append(bs, k.X...)
-	bs = append(bs, k.Y...)
-	return bs
-}
-
 func (app *App) notifyAll(ctx context.Context, _ string) error {
 	// get server keys
 	k, err := app.db.GetKey(ctx)
 	if err != nil {
 		return fmt.Errorf("could not get server key: %v", err)
 	}
-	prvk := ecdsa.PrivateKey{
-		PublicKey: ecdsa.PublicKey{
-			Curve: curve,
-			X:     new(big.Int),
-			Y:     new(big.Int),
-		},
-		D: new(big.Int),
-	}
-	prvk.D.SetBytes(k.D)
-	prvk.PublicKey.X.SetBytes(k.X)
-	prvk.PublicKey.Y.SetBytes(k.Y)
-
 	// get user keys
 	ss, err := app.db.GetSubscriptions(ctx)
 	if err != nil {
@@ -260,7 +230,9 @@ func (app *App) notifyAll(ctx context.Context, _ string) error {
 		// Send Notification
 		res, err := webpush.SendNotification([]byte("msg-sync"), &ws, &webpush.Options{
 			Subscriber:      "<mh@lambdasoup.com>",
-			VAPIDPrivateKey: base64.RawURLEncoding.EncodeToString(prvk.D.Bytes()),
+			VAPIDPrivateKey: k.sk,
+			VAPIDPublicKey:  k.pk,
+			TTL:             30,
 		})
 		log.Printf("%v", res)
 		if err != nil {

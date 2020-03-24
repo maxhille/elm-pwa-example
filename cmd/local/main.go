@@ -46,6 +46,9 @@ func (lrw *loggingResponseWriter) Header() http.Header {
 }
 
 func (lrw *loggingResponseWriter) Write(bs []byte) (int, error) {
+	if lrw.code == 0 {
+		lrw.code = 200
+	}
 	return lrw.rw.Write(bs)
 }
 
@@ -105,6 +108,7 @@ func (db *LocalDB) GetKey(ctx context.Context) (app.KeyPair, error) {
 }
 
 func (db *LocalDB) PutKey(ctx context.Context, k app.KeyPair) error {
+	log.Printf("saving new keypair: %v", k)
 	db.keyPair = &k
 	return nil
 }

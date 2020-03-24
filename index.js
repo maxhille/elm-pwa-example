@@ -74,8 +74,8 @@ function init() {
 const subscribePush = () => {
   fetch("vapid-public-key")
     .then(function(response) {
-      response.arrayBuffer().then(function(buffer) {
-        var publicKey = new Uint8Array(buffer);
+      response.text().then(function(str) {
+        var publicKey = urlBase64ToUint8Array(str);
         navigator.serviceWorker.ready
           .then(function(serviceWorkerRegistration) {
             serviceWorkerRegistration.pushManager
@@ -109,3 +109,22 @@ const subscribePush = () => {
       console.log("Looks like there was a problem: \n", error);
     });
 };
+/**
+ *  * urlBase64ToUint8Array
+ *   * 
+ *    * @param {string} base64String a public vavid key
+ *     */
+function urlBase64ToUint8Array(base64String) {
+	    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+	    var base64 = (base64String + padding)
+	        .replace(/\-/g, '+')
+	        .replace(/_/g, '/');
+
+	    var rawData = window.atob(base64);
+	    var outputArray = new Uint8Array(rawData.length);
+
+	    for (var i = 0; i < rawData.length; ++i) {
+		            outputArray[i] = rawData.charCodeAt(i);
+		        }
+	    return outputArray;
+}
