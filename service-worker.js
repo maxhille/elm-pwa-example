@@ -1,3 +1,8 @@
+self.importScripts('/elm-worker.js');
+self.importScripts('/elm-ports-indexeddb.js');
+var app = Elm.Worker.init();
+ElmPortsIndexedDB.bind(app);
+
 var CACHE_NAME = "elm-pwa-example-cache-v1";
 var urlsToCache = [
   "/",

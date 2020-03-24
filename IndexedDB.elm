@@ -6,22 +6,16 @@ type DBState
     | Initialized
 
 
-port initialized : (() -> msg) -> Sub msg
+port idxdbInitResponse : (() -> msg) -> Sub msg
 
 
-port initialize : String -> Cmd msg
-
-
-
--- port cache : E.Value -> Cmd msg
--- open : String ->
--- open dbName =
+port idxdbInitRequest : String -> Cmd msg
 
 
 open string =
-    initialize string
+    idxdbInitRequest string
 
 
 subscriptions : msg -> Sub msg
 subscriptions onInitialized =
-    initialized (\_ -> onInitialized)
+    idxdbInitResponse (\_ -> onInitialized)

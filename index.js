@@ -21,23 +21,6 @@ app.ports.refreshPosts.subscribe(() => {
   refreshPosts()
 })
 
-app.ports.initialize.subscribe(dbName => {
-  var request = indexedDB.open("elm-pwa-example-db");
-  request.onerror = function(event) {
-    alert("Why didn't you allow my web app to use IndexedDB?!");
-  };
-  request.onsuccess = function(event) {
-    db = event.target.result;
-    app.ports.initialized.send(null)
-  };
-  request.onupgradeneeded = function(event) {
-    var db = event.target.result;
-    db.createObjectStore("posts", {
-      keyPath: "id"
-    });
-  };
-})
-
 function init() {
   // set up service worker
   if (!("serviceWorker" in navigator)) {

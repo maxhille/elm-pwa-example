@@ -70,7 +70,7 @@ type publicFileSystem struct {
 }
 
 func (fs *publicFileSystem) Open(name string) (http.File, error) {
-	if name == "/elm.js" {
+	if name == "/elm.js" || name == "/elm-worker.js" {
 		return fs.build.Open(name)
 	}
 
