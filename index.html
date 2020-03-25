@@ -5,20 +5,14 @@
     <title>Elm + PWA</title>
     <style></style>
     <script src="elm.js"></script>
+    <script src="elm-ports-swclient.js"></script>
     <script src="base64ArrayBuffer.js"></script>
   </head>
 
   <body>
     <div id="myApp"></div>
     <script>
-      app = Elm.Main.init();
-      app.ports.postMessage.subscribe(function(text) {
-        post(text);
-      });
     </script>
     <script src="index.js"></script>
-    <script>
-      init();
-    </script>
   </body>
 </html>

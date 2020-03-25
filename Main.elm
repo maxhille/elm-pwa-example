@@ -4,7 +4,7 @@ import Browser
 import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events as HE
-import IndexedDB
+import SWClient
 
 
 port postMessage : String -> Cmd msg
@@ -17,7 +17,10 @@ port refreshPosts : () -> Cmd msg
 
 
 type alias Model =
-    { text : String, posts : List Post }
+    { text : String
+    , posts : List Post
+    , swcmodel : SWClient.Model
+    }
 
 
 type alias Post =
@@ -30,11 +33,16 @@ type Msg
     = TextChanged String
     | SendAndClear
     | PostsChanged (List Post)
-    | DBInitialized
+    | SWClientMsg SWClient.Msg
 
 
 main =
-    Browser.document { view = view, update = update, init = init, subscriptions = subscriptions }
+    Browser.document
+        { view = view
+        , update = update
+        , init = init
+        , subscriptions = subscriptions
+        }
 
 
 view : Model -> Browser.Document Msg
@@ -48,9 +56,14 @@ view model =
             , Html.ul []
                 (List.map viewPost model.posts)
             , Html.form [ HE.onSubmit SendAndClear ]
-                [ Html.input [ HA.value model.text, HE.onInput (\input -> TextChanged input) ] []
+                [ Html.input
+                    [ HA.value model.text
+                    , HE.onInput (\input -> TextChanged input)
+                    ]
+                    []
                 , Html.input [ HA.type_ "submit", HA.value "Senden" ] []
                 ]
+            , Html.map SWClientMsg (SWClient.view model.swcmodel)
             ]
         ]
     }
@@ -72,21 +85,25 @@ viewPost post =
 
 
 init : () -> ( Model, Cmd Msg )
-init flags =
-    ( initialModel, IndexedDB.open "elm-pwa-example-db" )
+init _ =
+    let
+        ( swcmodel, swccmd ) =
+            SWClient.init
+    in
+    ( { text = ""
+      , posts = []
+      , swcmodel = swcmodel
+      }
+    , Cmd.map SWClientMsg swccmd
+    )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ updatePosts PostsChanged
-        , IndexedDB.subscriptions DBInitialized
+        , Sub.map SWClientMsg (SWClient.subscriptions model.swcmodel)
         ]
-
-
-initialModel : Model
-initialModel =
-    { text = "", posts = [] }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -101,5 +118,9 @@ update msg model =
         PostsChanged newPosts ->
             ( { model | posts = newPosts }, Cmd.none )
 
-        DBInitialized ->
-            ( model, refreshPosts () )
+        SWClientMsg swcmsg ->
+            let
+                ( swcmodel, swccmd ) =
+                    SWClient.update swcmsg model.swcmodel
+            in
+            ( { model | swcmodel = swcmodel }, Cmd.map SWClientMsg swccmd )
