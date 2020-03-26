@@ -1,0 +1,53 @@
+runtime: go113
+
+handlers:
+  - url: /
+    static_files: index.html
+    upload: index.html
+    secure: always
+    login: required
+
+  - url: /index.js
+    static_files: index.js
+    upload: index.js
+    secure: always
+    login: required
+
+  - url: /favicon.ico
+    static_files: favicon.ico
+    upload: favicon.ico
+    secure: always
+    login: required
+
+  - url: /base64ArrayBuffer.js
+    static_files: base64ArrayBuffer.js
+    upload: base64ArrayBuffer.js
+    secure: always
+    login: required
+
+  - url: /elm.js
+    static_files: build/elm.js
+    upload: build/elm.js
+    secure: always
+    login: required
+
+  - url: /service-worker.js
+    static_files: service-worker.js
+    upload: service-worker.js
+    secure: always
+    login: required
+
+  - url: /vapid-public-key
+    login: required
+    secure: always
+    script: app.go
+
+  - url: /_ah/queue/go/delay
+    login: admin
+    script: app.go
+
+  - url: /api/.*
+    login: required
+    secure: always
+    script: app.go
+

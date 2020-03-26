@@ -1,10 +1,10 @@
 port module Main exposing (main)
 
+import Browser
 import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events as HE
-import Pwa
-import SWClient
+import ServiceWorker as SW
 
 
 port postMessage : String -> Cmd msg
@@ -19,7 +19,6 @@ port refreshPosts : () -> Cmd msg
 type alias Model =
     { text : String
     , posts : List Post
-    , swcmodel : SWClient.Model
     }
 
 
@@ -33,12 +32,12 @@ type Msg
     = TextChanged String
     | SendAndClear
     | PostsChanged (List Post)
-    | SWClientMsg SWClient.Msg
+    | SWAvailability SW.Availability
 
 
-main : Program () (Pwa.Model Model) (Pwa.Msg Msg)
+main : Program () Model Msg
 main =
-    Pwa.app
+    Browser.document
         { view = view
         , update = update
         , init = init
@@ -46,7 +45,7 @@ main =
         }
 
 
-view : Model -> Pwa.App Msg
+view : Model -> Browser.Document Msg
 view model =
     { title = "Elm PWA example"
     , body =
@@ -64,7 +63,6 @@ view model =
                     []
                 , Html.input [ HA.type_ "submit", HA.value "Senden" ] []
                 ]
-            , Html.map SWClientMsg (SWClient.view model.swcmodel)
             ]
         ]
     }
@@ -87,24 +85,16 @@ viewPost post =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    let
-        ( swcmodel, swccmd ) =
-            SWClient.init
-    in
     ( { text = ""
       , posts = []
-      , swcmodel = swcmodel
       }
-    , Cmd.map SWClientMsg swccmd
+    , SW.checkAvailability
     )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch
-        [ updatePosts PostsChanged
-        , Sub.map SWClientMsg (SWClient.subscriptions model.swcmodel)
-        ]
+    SW.getAvailability SWAvailability
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -119,9 +109,5 @@ update msg model =
         PostsChanged newPosts ->
             ( { model | posts = newPosts }, Cmd.none )
 
-        SWClientMsg swcmsg ->
-            let
-                ( swcmodel, swccmd ) =
-                    SWClient.update swcmsg model.swcmodel
-            in
-            ( { model | swcmodel = swcmodel }, Cmd.map SWClientMsg swccmd )
+        SWAvailability available ->
+            ( model, Cmd.none )
