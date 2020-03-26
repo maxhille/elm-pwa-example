@@ -1,9 +1,9 @@
 port module Main exposing (main)
 
-import Browser
 import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events as HE
+import Pwa
 import SWClient
 
 
@@ -36,8 +36,9 @@ type Msg
     | SWClientMsg SWClient.Msg
 
 
+main : Program () (Pwa.Model Model) (Pwa.Msg Msg)
 main =
-    Browser.document
+    Pwa.app
         { view = view
         , update = update
         , init = init
@@ -45,7 +46,7 @@ main =
         }
 
 
-view : Model -> Browser.Document Msg
+view : Model -> Pwa.App Msg
 view model =
     { title = "Elm PWA example"
     , body =
