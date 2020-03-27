@@ -1,5 +1,5 @@
 port module ServiceWorker exposing
-    ( Availability
+    ( Availability(..)
     , checkAvailability
     , getAvailability
     )

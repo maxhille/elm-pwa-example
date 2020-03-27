@@ -19,6 +19,7 @@ port refreshPosts : () -> Cmd msg
 type alias Model =
     { text : String
     , posts : List Post
+    , swavailability : SW.Availability
     }
 
 
@@ -50,7 +51,8 @@ view model =
     { title = "Elm PWA example"
     , body =
         [ Html.div []
-            [ Html.h1 []
+            [ viewPwaInfo model
+            , Html.h1 []
                 [ text "Hello Elm PWA Example!"
                 ]
             , Html.ul []
@@ -66,6 +68,23 @@ view model =
             ]
         ]
     }
+
+
+viewPwaInfo : Model -> Html Msg
+viewPwaInfo model =
+    Html.div []
+        [ Html.h2 [] [ text "PWA Info" ]
+        , text <|
+            case model.swavailability of
+                SW.Unknown ->
+                    "Unknown"
+
+                SW.Available ->
+                    "Available"
+
+                SW.NotAvailable ->
+                    "Not Available"
+        ]
 
 
 viewPost : Post -> Html Msg
@@ -87,6 +106,7 @@ init : () -> ( Model, Cmd Msg )
 init _ =
     ( { text = ""
       , posts = []
+      , swavailability = SW.Unknown
       }
     , SW.checkAvailability
     )
@@ -110,4 +130,4 @@ update msg model =
             ( { model | posts = newPosts }, Cmd.none )
 
         SWAvailability available ->
-            ( model, Cmd.none )
+            ( { model | swavailability = available }, Cmd.none )
