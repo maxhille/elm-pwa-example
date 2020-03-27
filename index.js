@@ -20,13 +20,6 @@ function init() {
     navigator.serviceWorker.onmessage = function(event) {
         refreshPosts();
     };
-    navigator.serviceWorker.register("/service-worker.js").then(
-        function(registration) {},
-        function(err) {
-            alert("Could not register Service Worker :-(");
-        }
-    );
-
     app.ports.refreshPosts.subscribe(() => {
         refreshPosts();
     });

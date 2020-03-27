@@ -20,6 +20,7 @@ type alias Model =
     { text : String
     , posts : List Post
     , swavailability : SW.Availability
+    , swRegistration : SW.Registration
     }
 
 
@@ -107,6 +108,7 @@ init _ =
     ( { text = ""
       , posts = []
       , swavailability = SW.Unknown
+      , swRegistration = SW.NotRegistered
       }
     , SW.checkAvailability
     )
@@ -129,5 +131,11 @@ update msg model =
         PostsChanged newPosts ->
             ( { model | posts = newPosts }, Cmd.none )
 
-        SWAvailability available ->
-            ( { model | swavailability = available }, Cmd.none )
+        SWAvailability availability ->
+            ( { model | swavailability = availability }
+            , if availability == SW.Available && (model.swRegistration == SW.NotRegistered) then
+                SW.register
+
+              else
+                Cmd.none
+            )
