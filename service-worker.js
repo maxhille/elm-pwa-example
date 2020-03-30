@@ -143,7 +143,7 @@ function notifyClients() {
 }
 
 self.addEventListener("message", event => {
-    console.log("I got a message");
+    event.source.postMessage("yeah hi");
 });
 
 function oldOnMessage(event) {

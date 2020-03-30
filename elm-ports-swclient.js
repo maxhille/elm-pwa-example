@@ -23,7 +23,9 @@ var ElmPortsSWClient = {
             );
         });
 
-        navigator.serviceWorker.onmessage = app.ports.onMessage;
+        navigator.serviceWorker.onmessage = event => {
+            app.ports.onMessageInternal.send(event.data);
+        };
 
         app.ports.postMessageInternal.subscribe(() => {
             if (!this.registration.active) {

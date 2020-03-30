@@ -36,6 +36,7 @@ type Msg
     | PostsChanged (List Post)
     | SWAvailability SW.Availability
     | SWRegistration SW.Registration
+    | SWMessage String
 
 
 main : Program () Model Msg
@@ -140,6 +141,7 @@ subscriptions _ =
     Sub.batch
         [ SW.getAvailability SWAvailability
         , SW.getRegistration SWRegistration
+        , SW.onMessage SWMessage
         ]
 
 
@@ -176,3 +178,6 @@ update msg model =
               else
                 Cmd.none
             )
+
+        SWMessage _ ->
+            ( model, Cmd.none )

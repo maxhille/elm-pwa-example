@@ -4,6 +4,7 @@ port module ServiceWorker exposing
     , checkAvailability
     , getAvailability
     , getRegistration
+    , onMessage
     , postMessage
     , register
     )
@@ -54,6 +55,9 @@ port availabilityRequest : () -> Cmd msg
 port postMessageInternal : () -> Cmd msg
 
 
+port onMessageInternal : (String -> msg) -> Sub msg
+
+
 port registrationRequest : () -> Cmd msg
 
 
@@ -68,6 +72,11 @@ checkAvailability =
 getAvailability : (Availability -> msg) -> Sub msg
 getAvailability f =
     availabilityResponse (availabilityFromBool >> f)
+
+
+onMessage : (String -> msg) -> Sub msg
+onMessage =
+    onMessageInternal
 
 
 availabilityFromBool : Bool -> Availability
