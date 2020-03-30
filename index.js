@@ -17,9 +17,6 @@ function refreshPosts() {
 }
 
 function init() {
-    navigator.serviceWorker.onmessage = function(event) {
-        refreshPosts();
-    };
     app.ports.refreshPosts.subscribe(() => {
         refreshPosts();
     });

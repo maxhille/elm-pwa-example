@@ -142,7 +142,11 @@ function notifyClients() {
           });
 }
 
-self.addEventListener("message", function(event) {
+self.addEventListener("message", event => {
+    console.log("I got a message");
+});
+
+function oldOnMessage(event) {
   var postsObjectStore = db
     .transaction("posts", "readwrite")
     .objectStore("posts");
@@ -156,8 +160,7 @@ self.addEventListener("message", function(event) {
     });
     self.registration.sync.register("sync-posts");
   };
-});
-
+}
 /**
  *
  * @param items An array of items.

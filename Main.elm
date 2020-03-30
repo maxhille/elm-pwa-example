@@ -136,7 +136,7 @@ init _ =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.batch
         [ SW.getAvailability SWAvailability
         , SW.getRegistration SWRegistration
@@ -169,4 +169,10 @@ update msg model =
             )
 
         SWRegistration registration ->
-            ( { model | swRegistration = registration }, Cmd.none )
+            ( { model | swRegistration = registration }
+            , if registration == SW.RegistrationSuccess then
+                SW.postMessage
+
+              else
+                Cmd.none
+            )

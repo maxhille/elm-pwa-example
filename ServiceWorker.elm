@@ -4,6 +4,7 @@ port module ServiceWorker exposing
     , checkAvailability
     , getAvailability
     , getRegistration
+    , postMessage
     , register
     )
 
@@ -25,6 +26,11 @@ register =
     registrationRequest ()
 
 
+postMessage : Cmd msg
+postMessage =
+    postMessageInternal ()
+
+
 getRegistration : (Registration -> msg) -> Sub msg
 getRegistration f =
     registrationResponse (registrationFromString >> f)
@@ -43,6 +49,9 @@ port availabilityResponse : (Bool -> msg) -> Sub msg
 
 
 port availabilityRequest : () -> Cmd msg
+
+
+port postMessageInternal : () -> Cmd msg
 
 
 port registrationRequest : () -> Cmd msg
