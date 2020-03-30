@@ -8,10 +8,10 @@ var ElmPortsSWClient = {
         app.ports.registrationRequest.subscribe(() => {
             navigator.serviceWorker.register("/service-worker.js").then(
                 registration => {
-                    console.log("registration success");
+                    app.ports.registrationResponse.send("success")
                 },
                 err => {
-                    console.log("registration error");
+                    app.ports.registrationResponse.send("error")
                 }
             );
         });

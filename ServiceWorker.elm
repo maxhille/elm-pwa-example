@@ -3,6 +3,7 @@ port module ServiceWorker exposing
     , Registration(..)
     , checkAvailability
     , getAvailability
+    , getRegistration
     , register
     )
 
@@ -14,14 +15,28 @@ type Availability
 
 
 type Registration
-    = NotRegistered
-    | Registered
+    = RegistrationUnknown
+    | RegistrationSuccess
     | RegistrationError
 
 
 register : Cmd msg
 register =
     registrationRequest ()
+
+
+getRegistration : (Registration -> msg) -> Sub msg
+getRegistration f =
+    registrationResponse (registrationFromString >> f)
+
+
+registrationFromString : String -> Registration
+registrationFromString s =
+    if s == "success" then
+        RegistrationSuccess
+
+    else
+        RegistrationError
 
 
 port availabilityResponse : (Bool -> msg) -> Sub msg
@@ -31,6 +46,9 @@ port availabilityRequest : () -> Cmd msg
 
 
 port registrationRequest : () -> Cmd msg
+
+
+port registrationResponse : (String -> msg) -> Sub msg
 
 
 checkAvailability : Cmd msg

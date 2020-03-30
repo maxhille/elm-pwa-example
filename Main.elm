@@ -35,6 +35,7 @@ type Msg
     | SendAndClear
     | PostsChanged (List Post)
     | SWAvailability SW.Availability
+    | SWRegistration SW.Registration
 
 
 main : Program () Model Msg
@@ -73,18 +74,38 @@ view model =
 
 viewPwaInfo : Model -> Html Msg
 viewPwaInfo model =
-    Html.div []
-        [ Html.h2 [] [ text "PWA Info" ]
-        , text <|
-            case model.swavailability of
-                SW.Unknown ->
-                    "Unknown"
+    Html.table []
+        [ Html.caption [] [ text "PWA Info" ]
+        , Html.tr []
+            [ Html.td [] [ text "Service Worker API" ]
+            , Html.td []
+                [ text <|
+                    case model.swavailability of
+                        SW.Unknown ->
+                            "Unknown"
 
-                SW.Available ->
-                    "Available"
+                        SW.Available ->
+                            "Available"
 
-                SW.NotAvailable ->
-                    "Not Available"
+                        SW.NotAvailable ->
+                            "Not Available"
+                ]
+            ]
+        , Html.tr []
+            [ Html.td [] [ text "Service Worker Registration" ]
+            , Html.td []
+                [ text <|
+                    case model.swRegistration of
+                        SW.RegistrationUnknown ->
+                            "Unknown"
+
+                        SW.RegistrationSuccess ->
+                            "Registered"
+
+                        SW.RegistrationError ->
+                            "Registration error"
+                ]
+            ]
         ]
 
 
@@ -108,7 +129,7 @@ init _ =
     ( { text = ""
       , posts = []
       , swavailability = SW.Unknown
-      , swRegistration = SW.NotRegistered
+      , swRegistration = SW.RegistrationUnknown
       }
     , SW.checkAvailability
     )
@@ -116,7 +137,10 @@ init _ =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    SW.getAvailability SWAvailability
+    Sub.batch
+        [ SW.getAvailability SWAvailability
+        , SW.getRegistration SWRegistration
+        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -133,9 +157,16 @@ update msg model =
 
         SWAvailability availability ->
             ( { model | swavailability = availability }
-            , if availability == SW.Available && (model.swRegistration == SW.NotRegistered) then
+            , if
+                availability
+                    == SW.Available
+                    && (model.swRegistration == SW.RegistrationUnknown)
+              then
                 SW.register
 
               else
                 Cmd.none
             )
+
+        SWRegistration registration ->
+            ( { model | swRegistration = registration }, Cmd.none )
