@@ -4,6 +4,7 @@ import Browser
 import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events as HE
+import Json.Decode
 import ServiceWorker as SW
 
 
@@ -21,6 +22,7 @@ type alias Model =
     , posts : List Post
     , swavailability : SW.Availability
     , swRegistration : SW.Registration
+    , swSubsciption : SW.Subscription
     }
 
 
@@ -37,6 +39,7 @@ type Msg
     | SWAvailability SW.Availability
     | SWRegistration SW.Registration
     | SWMessage String
+    | SWSubscriptionState (Result Json.Decode.Error SW.Subscription)
 
 
 main : Program () Model Msg
@@ -107,6 +110,18 @@ viewPwaInfo model =
                             "Registration error"
                 ]
             ]
+        , Html.tr []
+            [ Html.td [] [ text "Service Worker Subscription" ]
+            , Html.td []
+                [ text <|
+                    case model.swSubsciption of
+                        Nothing ->
+                            "No subscription"
+
+                        Just s ->
+                            s
+                ]
+            ]
         ]
 
 
@@ -131,6 +146,7 @@ init _ =
       , posts = []
       , swavailability = SW.Unknown
       , swRegistration = SW.RegistrationUnknown
+      , swSubsciption = Nothing
       }
     , SW.checkAvailability
     )
@@ -142,6 +158,7 @@ subscriptions _ =
         [ SW.getAvailability SWAvailability
         , SW.getRegistration SWRegistration
         , SW.onMessage SWMessage
+        , SW.subscriptionState SWSubscriptionState
         ]
 
 
@@ -173,7 +190,7 @@ update msg model =
         SWRegistration registration ->
             ( { model | swRegistration = registration }
             , if registration == SW.RegistrationSuccess then
-                SW.postMessage
+                Cmd.batch [ SW.postMessage, SW.getPushSubscription ]
 
               else
                 Cmd.none
@@ -181,3 +198,11 @@ update msg model =
 
         SWMessage _ ->
             ( model, Cmd.none )
+
+        SWSubscriptionState result ->
+            case result of
+                Err _ ->
+                    ( model, Cmd.none )
+
+                Ok subscription ->
+                    ( { model | swSubsciption = subscription }, Cmd.none )

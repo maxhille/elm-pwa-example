@@ -35,5 +35,8 @@ var ElmPortsSWClient = {
             var sw = this.registration.active;
             sw.postMessage("dummy");
         });
+
+        app.ports.pushSubscriptionRequest.subscribe(() => {
+        });
     }
 };
