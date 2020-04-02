@@ -9,6 +9,7 @@ port module ServiceWorker exposing
     , onMessage
     , postMessage
     , register
+    , sendBroadcast
     , subscriptionState
     )
 
@@ -82,6 +83,12 @@ port registrationResponse : (String -> msg) -> Sub msg
 
 
 port sendSubscriptionState : (Json.Decode.Value -> msg) -> Sub msg
+
+
+port sendBroadcast : Bool -> Cmd msg
+
+
+port receiveBroadcast : (Bool -> msg) -> Sub msg
 
 
 subscriptionState : (Result Json.Decode.Error Subscription -> msg) -> Sub msg

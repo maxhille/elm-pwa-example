@@ -20,21 +20,6 @@ function init() {
     app.ports.refreshPosts.subscribe(() => {
         refreshPosts();
     });
-
-    // set up database
-
-    // set up push
-    navigator.serviceWorker.ready.then(function(swRegistration) {
-        swRegistration.pushManager
-            .getSubscription()
-            .then(function(subscription) {
-                isSubscribed = !(subscription === null);
-
-                if (!isSubscribed) {
-                    subscribePush();
-                }
-            });
-    });
 }
 
 const subscribePush = () => {

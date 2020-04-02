@@ -3,6 +3,12 @@ self.importScripts("/elm-ports-indexeddb.js");
 var app = Elm.Worker.init();
 ElmPortsIndexedDB.bind(app);
 
+// set up broadcast channel
+const channel = new BroadcastChannel('sw-messages');
+app.ports.sendBroadcast.subscribe(msg => {
+	channel.postMessage(msg); 
+});
+
 var CACHE_NAME = "elm-pwa-example-cache-v1";
 var urlsToCache = ["/", "/index.js", "/elm.js", "/base64ArrayBuffer.js"];
 var db;
@@ -26,7 +32,6 @@ self.addEventListener("install", function(event) {
     // Perform install steps
     event.waitUntil(
         caches.open(CACHE_NAME).then(function(cache) {
-            console.log("Opened cache");
             return cache.addAll(urlsToCache);
         })
     );
@@ -39,7 +44,7 @@ self.addEventListener("activate", function(event) {
             self.registration.pushManager
                 .getSubscription()
                 .then(subscription => {
-                    app.sendSubscriptionState.send(subscription);
+                    app.ports.sendSubscriptionState.send(subscription);
                 })
         )
     );

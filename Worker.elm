@@ -1,7 +1,9 @@
 module Worker exposing (main)
 
 import IndexedDB
+import Json.Decode
 import Platform
+import ServiceWorker as SW
 
 
 main =
@@ -19,6 +21,7 @@ type alias Model =
 type Msg
     = TextChanged String
     | DBInitialized
+    | SWSubscription (Result Json.Decode.Error SW.Subscription)
 
 
 init : () -> ( Model, Cmd Msg )
@@ -40,7 +43,27 @@ update msg model =
         DBInitialized ->
             ( model, Cmd.none )
 
+        SWSubscription result ->
+            let
+                newModel =
+                    model
+
+                cmd =
+                    case result of
+                        Err _ ->
+                            Cmd.none
+
+                        Ok maybe ->
+                            case maybe of
+                                Nothing ->
+                                    SW.sendBroadcast False
+
+                                Just _ ->
+                                    SW.sendBroadcast True
+            in
+            ( newModel, cmd )
+
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    SW.subscriptionState SWSubscription

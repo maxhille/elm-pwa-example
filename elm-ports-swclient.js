@@ -1,3 +1,4 @@
+var channel = new BroadcastChannel("sw-messages");
 var ElmPortsSWClient = {
     registration: null,
     bind: function(app) {
@@ -36,7 +37,10 @@ var ElmPortsSWClient = {
             sw.postMessage("dummy");
         });
 
-        app.ports.pushSubscriptionRequest.subscribe(() => {
-        });
+        app.ports.pushSubscriptionRequest.subscribe(() => {});
+
+        channel.onmessage = event => {
+            console.log("received", event.data);
+        };
     }
 };
