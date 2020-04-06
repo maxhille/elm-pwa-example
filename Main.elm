@@ -38,8 +38,9 @@ type Msg
     | PostsChanged (List Post)
     | SWAvailability SW.Availability
     | SWRegistration SW.Registration
-    | SWMessage String
+    | SWMessage SW.Message
     | SWSubscriptionState (Result Json.Decode.Error SW.Subscription)
+    | Subscribe
 
 
 main : Program () Model Msg
@@ -113,16 +114,23 @@ viewPwaInfo model =
         , Html.tr []
             [ Html.td [] [ text "Service Worker Subscription" ]
             , Html.td []
-                [ text <|
-                    case model.swSubsciption of
-                        Nothing ->
-                            "No subscription"
+                [ case model.swSubsciption of
+                    Nothing ->
+                        Html.div []
+                            [ text "No subscription"
+                            , Html.button [ HE.onClick Subscribe ] [ text "Subscribe" ]
+                            ]
 
-                        Just s ->
-                            s
+                    Just s ->
+                        text ("Subscription:" ++ s)
                 ]
             ]
         ]
+
+
+subscribe : Cmd msg
+subscribe =
+    SW.postMessage "subscribe"
 
 
 viewPost : Post -> Html Msg
@@ -190,11 +198,14 @@ update msg model =
         SWRegistration registration ->
             ( { model | swRegistration = registration }
             , if registration == SW.RegistrationSuccess then
-                Cmd.batch [ SW.postMessage, SW.getPushSubscription ]
+                Cmd.batch [ SW.postMessage "hello", SW.getPushSubscription ]
 
               else
                 Cmd.none
             )
+
+        Subscribe ->
+            ( model, subscribe )
 
         SWMessage _ ->
             ( model, Cmd.none )

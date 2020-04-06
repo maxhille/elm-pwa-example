@@ -1,5 +1,6 @@
 port module ServiceWorker exposing
     ( Availability(..)
+    , Message(..)
     , Registration(..)
     , Subscription
     , checkAvailability
@@ -32,14 +33,19 @@ type alias Subscription =
     Maybe String
 
 
+type Message
+    = Subscribe
+    | Invalid
+
+
 register : Cmd msg
 register =
     registrationRequest ()
 
 
-postMessage : Cmd msg
-postMessage =
-    postMessageInternal ()
+postMessage : String -> Cmd msg
+postMessage s =
+    postMessageInternal s
 
 
 getRegistration : (Registration -> msg) -> Sub msg
@@ -70,7 +76,7 @@ port availabilityRequest : () -> Cmd msg
 port pushSubscriptionRequest : () -> Cmd msg
 
 
-port postMessageInternal : () -> Cmd msg
+port postMessageInternal : String -> Cmd msg
 
 
 port onMessageInternal : (String -> msg) -> Sub msg
@@ -115,9 +121,19 @@ getAvailability msg =
     availabilityResponse (availabilityFromBool >> msg)
 
 
-onMessage : (String -> msg) -> Sub msg
-onMessage =
-    onMessageInternal
+onMessage : (Message -> msg) -> Sub msg
+onMessage msg =
+    onMessageInternal (decodeMessage >> msg)
+
+
+decodeMessage : String -> Message
+decodeMessage s =
+    case s of
+        "subscribe" ->
+            Subscribe
+
+        _ ->
+            Invalid
 
 
 availabilityFromBool : Bool -> Availability

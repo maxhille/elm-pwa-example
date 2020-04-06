@@ -28,13 +28,13 @@ var ElmPortsSWClient = {
             app.ports.onMessageInternal.send(event.data);
         };
 
-        app.ports.postMessageInternal.subscribe(() => {
+        app.ports.postMessageInternal.subscribe(msg => {
             if (!this.registration.active) {
                 console.log("could not post msg: SW not active");
                 return;
             }
             var sw = this.registration.active;
-            sw.postMessage("dummy");
+            sw.postMessage(str);
         });
 
         app.ports.pushSubscriptionRequest.subscribe(() => {});

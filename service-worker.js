@@ -153,7 +153,7 @@ function notifyClients() {
 }
 
 self.addEventListener("message", event => {
-    event.source.postMessage("yeah hi");
+    app.ports.onMessageInternal.send(event.data);
 });
 
 function oldOnMessage(event) {

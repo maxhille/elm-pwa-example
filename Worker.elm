@@ -22,6 +22,7 @@ type Msg
     = TextChanged String
     | DBInitialized
     | SWSubscription (Result Json.Decode.Error SW.Subscription)
+    | SWMessage SW.Message
 
 
 init : () -> ( Model, Cmd Msg )
@@ -63,7 +64,18 @@ update msg model =
             in
             ( newModel, cmd )
 
+        SWMessage swmsg ->
+            case swmsg of
+                SW.Subscribe ->
+                    ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    SW.subscriptionState SWSubscription
+    Sub.batch
+        [ SW.subscriptionState SWSubscription
+        , SW.onMessage SWMessage
+        ]
