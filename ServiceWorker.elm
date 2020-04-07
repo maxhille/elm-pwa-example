@@ -1,12 +1,15 @@
 port module ServiceWorker exposing
     ( Availability(..)
+    , FetchResult
     , Message(..)
     , Registration(..)
     , Subscription
     , checkAvailability
+    , fetch
     , getAvailability
     , getPushSubscription
     , getRegistration
+    , onFetchResult
     , onMessage
     , postMessage
     , register
@@ -33,6 +36,10 @@ type alias Subscription =
     Maybe String
 
 
+type alias FetchResult =
+    String
+
+
 type Message
     = Subscribe
     | Invalid
@@ -41,6 +48,11 @@ type Message
 register : Cmd msg
 register =
     registrationRequest ()
+
+
+fetch : Cmd msg
+fetch =
+    fetchInternal ()
 
 
 postMessage : String -> Cmd msg
@@ -85,6 +97,12 @@ port onMessageInternal : (String -> msg) -> Sub msg
 port registrationRequest : () -> Cmd msg
 
 
+port fetchInternal : () -> Cmd msg
+
+
+port onFetchResultInternal : (String -> msg) -> Sub msg
+
+
 port registrationResponse : (String -> msg) -> Sub msg
 
 
@@ -124,6 +142,16 @@ getAvailability msg =
 onMessage : (Message -> msg) -> Sub msg
 onMessage msg =
     onMessageInternal (decodeMessage >> msg)
+
+
+onFetchResult : (FetchResult -> msg) -> Sub msg
+onFetchResult msg =
+    onFetchResultInternal (decodeFetchResult >> msg)
+
+
+decodeFetchResult : String -> FetchResult
+decodeFetchResult s =
+    s
 
 
 decodeMessage : String -> Message

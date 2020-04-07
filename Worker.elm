@@ -23,6 +23,7 @@ type Msg
     | DBInitialized
     | SWSubscription (Result Json.Decode.Error SW.Subscription)
     | SWMessage SW.Message
+    | SWFetchResult SW.FetchResult
 
 
 init : () -> ( Model, Cmd Msg )
@@ -67,10 +68,13 @@ update msg model =
         SWMessage swmsg ->
             case swmsg of
                 SW.Subscribe ->
-                    ( model, Cmd.none )
+                    ( model, SW.fetch )
 
                 _ ->
                     ( model, Cmd.none )
+
+        SWFetchResult result ->
+            ( model, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
@@ -78,4 +82,5 @@ subscriptions model =
     Sub.batch
         [ SW.subscriptionState SWSubscription
         , SW.onMessage SWMessage
+        , SW.onFetchResult SWFetchResult
         ]

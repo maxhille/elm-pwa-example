@@ -8,6 +8,13 @@ const channel = new BroadcastChannel('sw-messages');
 app.ports.sendBroadcast.subscribe(msg => {
 	channel.postMessage(msg); 
 });
+app.ports.fetchInternal.subscribe(() => {
+    fetch("vapid-public-key")
+        .then(response => { return response.text(); })
+        .then(function(text) {
+            app.ports.onFetchResultInternal.send(text);
+        });
+});
 
 var CACHE_NAME = "elm-pwa-example-cache-v1";
 var urlsToCache = ["/", "/index.js", "/elm.js", "/base64ArrayBuffer.js"];
