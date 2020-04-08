@@ -15,13 +15,14 @@ main =
 
 
 type alias Model =
-    { text : String }
+    { subscription : SW.Subscription
+    , vapidKey : Maybe String
+    }
 
 
 type Msg
-    = TextChanged String
-    | DBInitialized
-    | SWSubscription (Result Json.Decode.Error SW.Subscription)
+    = DBInitialized
+    | SWSubscription SW.Subscription
     | SWMessage SW.Message
     | SWFetchResult SW.FetchResult
 
@@ -33,37 +34,19 @@ init flags =
 
 initialModel : Model
 initialModel =
-    { text = "" }
+    { subscription = SW.NoSubscription
+    , vapidKey = Nothing
+    }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        TextChanged newText ->
-            ( { model | text = newText }, Cmd.none )
-
         DBInitialized ->
             ( model, Cmd.none )
 
-        SWSubscription result ->
-            let
-                newModel =
-                    model
-
-                cmd =
-                    case result of
-                        Err _ ->
-                            Cmd.none
-
-                        Ok maybe ->
-                            case maybe of
-                                Nothing ->
-                                    SW.sendBroadcast False
-
-                                Just _ ->
-                                    SW.sendBroadcast True
-            in
-            ( newModel, cmd )
+        SWSubscription subscription ->
+            ( { model | subscription = subscription }, updateClients model )
 
         SWMessage swmsg ->
             case swmsg of
@@ -74,7 +57,19 @@ update msg model =
                     ( model, Cmd.none )
 
         SWFetchResult result ->
-            ( model, Cmd.none )
+            ( { model | vapidKey = Just result }, updateClients model )
+
+
+updateClients : Model -> Cmd Msg
+updateClients model =
+    clientState model |> SW.updateClients
+
+
+clientState : Model -> SW.ClientState
+clientState model =
+    { subscription = model.subscription
+    , vapidKey = model.vapidKey
+    }
 
 
 subscriptions : Model -> Sub Msg

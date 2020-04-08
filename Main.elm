@@ -39,7 +39,7 @@ type Msg
     | SWAvailability SW.Availability
     | SWRegistration SW.Registration
     | SWMessage SW.Message
-    | SWSubscriptionState (Result Json.Decode.Error SW.Subscription)
+    | SWSubscription SW.Subscription
     | Subscribe
 
 
@@ -115,14 +115,14 @@ viewPwaInfo model =
             [ Html.td [] [ text "Service Worker Subscription" ]
             , Html.td []
                 [ case model.swSubsciption of
-                    Nothing ->
+                    SW.NoSubscription ->
                         Html.div []
                             [ text "No subscription"
                             , Html.button [ HE.onClick Subscribe ] [ text "Subscribe" ]
                             ]
 
-                    Just s ->
-                        text ("Subscription:" ++ s)
+                    SW.Subscribed data ->
+                        text ("Subscription:" ++ data.endpoint)
                 ]
             ]
         ]
@@ -154,7 +154,7 @@ init _ =
       , posts = []
       , swavailability = SW.Unknown
       , swRegistration = SW.RegistrationUnknown
-      , swSubsciption = Nothing
+      , swSubsciption = SW.NoSubscription
       }
     , SW.checkAvailability
     )
@@ -166,7 +166,7 @@ subscriptions _ =
         [ SW.getAvailability SWAvailability
         , SW.getRegistration SWRegistration
         , SW.onMessage SWMessage
-        , SW.subscriptionState SWSubscriptionState
+        , SW.subscriptionState SWSubscription
         ]
 
 
@@ -210,10 +210,5 @@ update msg model =
         SWMessage _ ->
             ( model, Cmd.none )
 
-        SWSubscriptionState result ->
-            case result of
-                Err _ ->
-                    ( model, Cmd.none )
-
-                Ok subscription ->
-                    ( { model | swSubsciption = subscription }, Cmd.none )
+        SWSubscription subscription ->
+            ( { model | swSubsciption = subscription }, Cmd.none )

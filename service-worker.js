@@ -4,15 +4,27 @@ var app = Elm.Worker.init();
 ElmPortsIndexedDB.bind(app);
 
 // set up broadcast channel
-const channel = new BroadcastChannel('sw-messages');
+const channel = new BroadcastChannel("sw-messages");
 app.ports.sendBroadcast.subscribe(msg => {
-	channel.postMessage(msg); 
+    channel.postMessage(msg);
 });
 app.ports.fetchInternal.subscribe(() => {
     fetch("vapid-public-key")
-        .then(response => { return response.text(); })
+        .then(response => {
+            return response.text();
+        })
         .then(function(text) {
             app.ports.onFetchResultInternal.send(text);
+        });
+});
+app.ports.subscribeInternal.subscribe(pk => {
+    self.registration.pushManager
+        .subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: pk
+        })
+        .then(subscription => {
+            app.ports.sendSubscriptionState.send(subscription);
         });
 });
 
