@@ -23,6 +23,7 @@ type alias Model =
     , swavailability : SW.Availability
     , swRegistration : SW.Registration
     , swSubsciption : SW.Subscription
+    , swVapidKey : Maybe String
     }
 
 
@@ -38,8 +39,7 @@ type Msg
     | PostsChanged (List Post)
     | SWAvailability SW.Availability
     | SWRegistration SW.Registration
-    | SWMessage SW.Message
-    | SWSubscription SW.Subscription
+    | SWClientUpdate (Result SW.Error SW.ClientState)
     | Subscribe
 
 
@@ -116,13 +116,26 @@ viewPwaInfo model =
             , Html.td []
                 [ case model.swSubsciption of
                     SW.NoSubscription ->
-                        Html.div []
-                            [ text "No subscription"
-                            , Html.button [ HE.onClick Subscribe ] [ text "Subscribe" ]
-                            ]
+                        text "No subscription"
 
                     SW.Subscribed data ->
                         text ("Subscription:" ++ data.endpoint)
+                ]
+            ]
+        , Html.tr []
+            [ Html.td [] [ text "Service Worker VAPID key" ]
+            , Html.td []
+                [ case model.swVapidKey of
+                    Nothing ->
+                        text "No VAPID key"
+
+                    Just key ->
+                        Html.div []
+                            [ text "Has VAPID key"
+                            , Html.button
+                                [ HE.onClick Subscribe ]
+                                [ text "Subscribe" ]
+                            ]
                 ]
             ]
         ]
@@ -155,6 +168,7 @@ init _ =
       , swavailability = SW.Unknown
       , swRegistration = SW.RegistrationUnknown
       , swSubsciption = SW.NoSubscription
+      , swVapidKey = Nothing
       }
     , SW.checkAvailability
     )
@@ -165,8 +179,7 @@ subscriptions _ =
     Sub.batch
         [ SW.getAvailability SWAvailability
         , SW.getRegistration SWRegistration
-        , SW.onMessage SWMessage
-        , SW.subscriptionState SWSubscription
+        , SW.onClientUpdate SWClientUpdate
         ]
 
 
@@ -207,8 +220,10 @@ update msg model =
         Subscribe ->
             ( model, subscribe )
 
-        SWMessage _ ->
-            ( model, Cmd.none )
+        SWClientUpdate result ->
+            case result of
+                Err _ ->
+                    ( model, Cmd.none )
 
-        SWSubscription subscription ->
-            ( { model | swSubsciption = subscription }, Cmd.none )
+                Ok cu ->
+                    ( { model | swSubsciption = cu.subscription, swVapidKey = cu.vapidKey }, Cmd.none )

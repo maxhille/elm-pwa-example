@@ -5,7 +5,7 @@ ElmPortsIndexedDB.bind(app);
 
 // set up broadcast channel
 const channel = new BroadcastChannel("sw-messages");
-app.ports.sendBroadcast.subscribe(msg => {
+app.ports.postMessageInternal.subscribe(msg => {
     channel.postMessage(msg);
 });
 app.ports.fetchInternal.subscribe(() => {
@@ -15,16 +15,6 @@ app.ports.fetchInternal.subscribe(() => {
         })
         .then(function(text) {
             app.ports.onFetchResultInternal.send(text);
-        });
-});
-app.ports.subscribeInternal.subscribe(pk => {
-    self.registration.pushManager
-        .subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: pk
-        })
-        .then(subscription => {
-            app.ports.sendSubscriptionState.send(subscription);
         });
 });
 
@@ -172,7 +162,7 @@ function notifyClients() {
 }
 
 self.addEventListener("message", event => {
-    app.ports.onMessageInternal.send(event.data);
+    app.ports.onClientMessageInternal.send(event.data);
 });
 
 function oldOnMessage(event) {

@@ -22,8 +22,8 @@ type alias Model =
 
 type Msg
     = DBInitialized
-    | SWSubscription SW.Subscription
-    | SWMessage SW.Message
+    | SWSubscription (Result SW.Error SW.Subscription)
+    | SWClientMessage (Result SW.Error SW.ClientMessage)
     | SWFetchResult SW.FetchResult
 
 
@@ -45,15 +45,22 @@ update msg model =
         DBInitialized ->
             ( model, Cmd.none )
 
-        SWSubscription subscription ->
-            ( { model | subscription = subscription }, updateClients model )
+        SWSubscription result ->
+            case result of
+                Err s ->
+                    ( model, Cmd.none )
 
-        SWMessage swmsg ->
-            case swmsg of
-                SW.Subscribe ->
-                    ( model, SW.fetch )
+                Ok subscription ->
+                    ( { model | subscription = subscription }, updateClients model )
 
-                _ ->
+        SWClientMessage result ->
+            case result of
+                Ok cmsg ->
+                    case cmsg of
+                        SW.Subscribe ->
+                            ( model, SW.fetch )
+
+                Err _ ->
                     ( model, Cmd.none )
 
         SWFetchResult result ->
@@ -75,7 +82,7 @@ clientState model =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ SW.subscriptionState SWSubscription
-        , SW.onMessage SWMessage
+        [ SW.onSubscriptionState SWSubscription
+        , SW.onClientMessage SWClientMessage
         , SW.onFetchResult SWFetchResult
         ]

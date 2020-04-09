@@ -1,8 +1,9 @@
 port module ServiceWorker exposing
     ( Availability(..)
+    , ClientMessage(..)
     , ClientState
+    , Error
     , FetchResult
-    , Message(..)
     , Registration(..)
     , Subscription(..)
     , checkAvailability
@@ -10,13 +11,14 @@ port module ServiceWorker exposing
     , getAvailability
     , getPushSubscription
     , getRegistration
+    , onClientMessage
+    , onClientUpdate
     , onFetchResult
-    , onMessage
+    , onSubscriptionState
     , postMessage
     , register
     , sendBroadcast
     , subscribe
-    , subscriptionState
     , updateClients
     )
 
@@ -34,6 +36,10 @@ type Registration
     = RegistrationUnknown
     | RegistrationSuccess
     | RegistrationError
+
+
+type ClientMessage
+    = Subscribe
 
 
 type Subscription
@@ -58,9 +64,8 @@ type alias FetchResult =
     String
 
 
-type Message
-    = Subscribe
-    | Invalid
+type alias Error =
+    String
 
 
 updateClients : ClientState -> Cmd msg
@@ -96,7 +101,8 @@ encodeSubscription subscription =
 
         Subscribed data ->
             JE.object
-                [ ( "data"
+                [ ( "type", JE.string "subscribed" )
+                , ( "data"
                   , JE.object
                         [ ( "auth", JE.string data.auth )
                         , ( "p256dh", JE.string data.p256dh )
@@ -104,6 +110,20 @@ encodeSubscription subscription =
                         ]
                   )
                 ]
+
+
+decodeSubscription : JD.Decoder Subscription
+decodeSubscription =
+    JD.field "type" JD.string
+        |> JD.andThen
+            (\typ ->
+                case typ of
+                    "none" ->
+                        JD.succeed NoSubscription
+
+                    _ ->
+                        JD.fail <| "unknown type: " ++ typ
+            )
 
 
 register : Cmd msg
@@ -157,7 +177,10 @@ port pushSubscriptionRequest : () -> Cmd msg
 port postMessageInternal : JE.Value -> Cmd msg
 
 
-port onMessageInternal : (String -> msg) -> Sub msg
+port onMessageInternal : (JD.Value -> msg) -> Sub msg
+
+
+port onClientMessageInternal : (String -> msg) -> Sub msg
 
 
 port registrationRequest : () -> Cmd msg
@@ -175,7 +198,7 @@ port registrationResponse : (String -> msg) -> Sub msg
 port subscribeInternal : String -> Cmd msg
 
 
-port sendSubscriptionState : (JD.Value -> msg) -> Sub msg
+port onSubscriptionStateInternal : (JD.Value -> msg) -> Sub msg
 
 
 port sendBroadcast : Bool -> Cmd msg
@@ -184,19 +207,18 @@ port sendBroadcast : Bool -> Cmd msg
 port receiveBroadcast : (Bool -> msg) -> Sub msg
 
 
-subscriptionState : (Subscription -> msg) -> Sub msg
-subscriptionState msg =
-    sendSubscriptionState (subscriptionDecoder >> msg)
+onSubscriptionState : (Result Error Subscription -> msg) -> Sub msg
+onSubscriptionState msg =
+    onSubscriptionStateInternal
+        (JD.decodeValue decodeSubscription
+            >> mapError
+            >> msg
+        )
 
 
-subscriptionDecoder : JD.Value -> Subscription
-subscriptionDecoder value =
-    case JD.decodeValue subscriptionDataDecoder value of
-        Err _ ->
-            NoSubscription
-
-        Ok data ->
-            Subscribed data
+mapError : Result JD.Error a -> Result Error a
+mapError =
+    Result.mapError JD.errorToString
 
 
 subscriptionDataDecoder : JD.Decoder SubscriptionData
@@ -217,9 +239,30 @@ getAvailability msg =
     availabilityResponse (availabilityFromBool >> msg)
 
 
-onMessage : (Message -> msg) -> Sub msg
-onMessage msg =
-    onMessageInternal (decodeMessage >> msg)
+onClientUpdate : (Result Error ClientState -> msg) -> Sub msg
+onClientUpdate msg =
+    onMessageInternal
+        (JD.decodeValue decodeClientState >> mapError >> msg)
+
+
+onClientMessage : (Result Error ClientMessage -> msg) -> Sub msg
+onClientMessage msg =
+    onClientMessageInternal
+        (JD.decodeString decodeClientMessage >> mapError >> msg)
+
+
+decodeClientMessage : JD.Decoder ClientMessage
+decodeClientMessage =
+    JD.string
+        |> JD.andThen
+            (\v ->
+                case v of
+                    "subscribe" ->
+                        JD.succeed Subscribe
+
+                    _ ->
+                        JD.fail <| "unknown message: " ++ v
+            )
 
 
 onFetchResult : (FetchResult -> msg) -> Sub msg
@@ -232,14 +275,11 @@ decodeFetchResult s =
     s
 
 
-decodeMessage : String -> Message
-decodeMessage s =
-    case s of
-        "subscribe" ->
-            Subscribe
-
-        _ ->
-            Invalid
+decodeClientState : JD.Decoder ClientState
+decodeClientState =
+    JD.map2 ClientState
+        (JD.at [ "subscription" ] decodeSubscription)
+        (JD.at [ "vapidKey" ] (JD.nullable JD.string))
 
 
 availabilityFromBool : Bool -> Availability

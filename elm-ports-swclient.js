@@ -40,7 +40,19 @@ var ElmPortsSWClient = {
         app.ports.pushSubscriptionRequest.subscribe(() => {});
 
         channel.onmessage = event => {
-            console.log("received", event.data);
+            app.ports.onMessageInternal(event.data);
         };
+        
+        //app.ports.subscribeInternal.subscribe(pk => {
+        //    self.registration.pushManager
+        //        .subscribe({
+        //            userVisibleOnly: true,
+        //            applicationServerKey: pk
+        //        })
+        //        .then(subscription => {
+        //            app.ports.sendSubscriptionState.send(subscription);
+        //        });
+        //});
     }
+
 };
