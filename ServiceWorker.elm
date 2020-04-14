@@ -24,6 +24,7 @@ port module ServiceWorker exposing
 
 import Json.Decode as JD
 import Json.Encode as JE
+import Permissions as P
 
 
 type Availability
@@ -40,6 +41,7 @@ type Registration
 
 type ClientMessage
     = Subscribe
+    | Hello
 
 
 type Subscription
@@ -57,6 +59,7 @@ type alias SubscriptionData =
 type alias ClientState =
     { subscription : Subscription
     , vapidKey : Maybe String
+    , permissionStatus : Maybe P.PermissionStatus
     }
 
 
@@ -70,6 +73,9 @@ type alias Error =
 
 updateClients : ClientState -> Cmd msg
 updateClients state =
+    let
+        _ = Debug.log "sw updateClients()" (Debug.toString state) 
+    in
     state
         |> encodeClientstate
         |> postMessageInternal
@@ -80,6 +86,10 @@ encodeClientstate v =
     JE.object
         [ ( "subscription", encodeSubscription v.subscription )
         , ( "vapidKey", encodeMaybeString v.vapidKey )
+        , ( "permissionStatus",
+            Maybe.map P.permissionStatusString v.permissionStatus
+                |> encodeMaybeString 
+            )
         ]
 
 
@@ -260,6 +270,9 @@ decodeClientMessage =
                     "subscribe" ->
                         JD.succeed Subscribe
 
+                    "hello" ->
+                        JD.succeed Hello
+
                     _ ->
                         JD.fail <| "unknown message: " ++ v
             )
@@ -277,10 +290,15 @@ decodeFetchResult s =
 
 decodeClientState : JD.Decoder ClientState
 decodeClientState =
-    JD.map2 ClientState
+    JD.map3 ClientState
         (JD.at [ "subscription" ] decodeSubscription)
         (JD.at [ "vapidKey" ] (JD.nullable JD.string))
+        (JD.at [ "permissionStatus" ] (JD.nullable decodePermissionStatus))
 
+decodePermissionStatus : JD.Decoder P.PermissionStatus
+decodePermissionStatus =
+    JD.string
+        |> JD.andThen (\s -> JD.succeed (P.permissionStatus s))
 
 availabilityFromBool : Bool -> Availability
 availabilityFromBool b =

@@ -6,6 +6,7 @@ ElmPortsIndexedDB.bind(app);
 // set up broadcast channel
 const channel = new BroadcastChannel("sw-messages");
 app.ports.postMessageInternal.subscribe(msg => {
+    console.log("sw snd: ", msg);
     channel.postMessage(msg);
 });
 app.ports.fetchInternal.subscribe(() => {
@@ -17,6 +18,14 @@ app.ports.fetchInternal.subscribe(() => {
             app.ports.onFetchResultInternal.send(text);
         });
 });
+
+self.navigator.permissions.query({name:"notifications"})
+    .then(ps => {
+        app.ports.onPermissionChangeInternal.send(ps.state);
+        ps.onchange = ev => {
+            console.log(ev.target);
+        app.ports.onPermissionChangeInternal.send(ev.target.state);
+    } });
 
 var CACHE_NAME = "elm-pwa-example-cache-v1";
 var urlsToCache = ["/", "/index.js", "/elm.js", "/base64ArrayBuffer.js"];
@@ -162,7 +171,8 @@ function notifyClients() {
 }
 
 self.addEventListener("message", event => {
-    app.ports.onClientMessageInternal.send(event.data);
+    console.log("sw rcv: ", event.data);
+    app.ports.onClientMessageInternal.send(JSON.stringify(event.data));
 });
 
 function oldOnMessage(event) {

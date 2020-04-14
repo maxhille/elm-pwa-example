@@ -35,12 +35,14 @@ var ElmPortsSWClient = {
             }
             var sw = this.registration.active;
             sw.postMessage(msg);
+            console.log("client snd: ", msg);
         });
 
         app.ports.pushSubscriptionRequest.subscribe(() => {});
 
         channel.onmessage = event => {
-            app.ports.onMessageInternal(event.data);
+            app.ports.onMessageInternal.send(event.data);
+            console.log("client rcv: ", event.data);
         };
         
         //app.ports.subscribeInternal.subscribe(pk => {

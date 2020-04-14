@@ -6,6 +6,7 @@ import Html.Attributes as HA
 import Html.Events as HE
 import Json.Decode
 import ServiceWorker as SW
+import Permissions as P
 
 
 port postMessage : String -> Cmd msg
@@ -24,6 +25,7 @@ type alias Model =
     , swRegistration : SW.Registration
     , swSubsciption : SW.Subscription
     , swVapidKey : Maybe String
+    , permissionStatus : Maybe P.PermissionStatus
     }
 
 
@@ -138,6 +140,27 @@ viewPwaInfo model =
                             ]
                 ]
             ]
+        , Html.tr []
+            [ Html.td [] [ text "Notification Permission" ]
+            , Html.td []
+                [ case model.permissionStatus of
+                    Nothing ->
+                        text "Unknown"
+
+                    Just ps ->
+                        case ps of
+                            P.Granted -> 
+                                Html.div []
+                                    [ text "Granted" ]
+                            _ -> 
+                                Html.div []
+                                    [ text (P.permissionStatusString ps) 
+                                    , Html.button
+                                        [ ]
+                                        [ text "Subscribe" ]
+                                    ]
+                ]
+            ]
         ]
 
 
@@ -169,6 +192,7 @@ init _ =
       , swRegistration = SW.RegistrationUnknown
       , swSubsciption = SW.NoSubscription
       , swVapidKey = Nothing
+      , permissionStatus = Nothing
       }
     , SW.checkAvailability
     )
@@ -226,4 +250,9 @@ update msg model =
                     ( model, Cmd.none )
 
                 Ok cu ->
-                    ( { model | swSubsciption = cu.subscription, swVapidKey = cu.vapidKey }, Cmd.none )
+                    ( { model
+                        | swSubsciption = cu.subscription
+                        , swVapidKey = cu.vapidKey
+                        , permissionStatus = cu.permissionStatus
+                    }
+                    , Cmd.none )
