@@ -45,6 +45,10 @@ var ElmPortsSWClient = {
             console.log("client rcv: ", event.data);
         };
         
+        app.ports.requestPermissionInternal.subscribe(() => {
+            Notification.requestPermission();
+        });
+        
         //app.ports.subscribeInternal.subscribe(pk => {
         //    self.registration.pushManager
         //        .subscribe({

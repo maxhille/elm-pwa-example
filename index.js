@@ -22,6 +22,7 @@ function init() {
     });
 }
 
+
 const subscribePush = () => {
     fetch("vapid-public-key")
         .then(function(response) {

@@ -5,8 +5,8 @@ import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events as HE
 import Json.Decode
-import ServiceWorker as SW
 import Permissions as P
+import ServiceWorker as SW
 
 
 port postMessage : String -> Cmd msg
@@ -43,6 +43,7 @@ type Msg
     | SWRegistration SW.Registration
     | SWClientUpdate (Result SW.Error SW.ClientState)
     | Subscribe
+    | RequestPermission
 
 
 main : Program () Model Msg
@@ -149,15 +150,21 @@ viewPwaInfo model =
 
                     Just ps ->
                         case ps of
-                            P.Granted -> 
+                            P.Granted ->
                                 Html.div []
                                     [ text "Granted" ]
-                            _ -> 
+
+                            P.Prompt ->
                                 Html.div []
-                                    [ text (P.permissionStatusString ps) 
+                                    [ text (P.permissionStatusString ps)
                                     , Html.button
-                                        [ ]
-                                        [ text "Subscribe" ]
+                                        [ HE.onClick RequestPermission ]
+                                        [ text "Request" ]
+                                    ]
+
+                            P.Denied ->
+                                Html.div []
+                                    [ text (P.permissionStatusString ps)
                                     ]
                 ]
             ]
@@ -254,5 +261,9 @@ update msg model =
                         | swSubsciption = cu.subscription
                         , swVapidKey = cu.vapidKey
                         , permissionStatus = cu.permissionStatus
-                    }
-                    , Cmd.none )
+                      }
+                    , Cmd.none
+                    )
+
+        RequestPermission ->
+            ( model, P.requestPermission )
