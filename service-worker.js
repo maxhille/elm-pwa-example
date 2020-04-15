@@ -21,9 +21,9 @@ app.ports.fetchInternal.subscribe(() => {
 
 app.ports.subscribeInternal.subscribe(key => {
     var options = {
-        userVisibleOnly : true,
-        applicationServerKey : key
-    }
+        userVisibleOnly: true,
+        applicationServerKey: key
+    };
     registration.pushManager
         .subscribe(options)
         .then(x => {
@@ -31,20 +31,25 @@ app.ports.subscribeInternal.subscribe(key => {
         })
         .catch(x => {
             console.log(x);
-        }) 
-
+        });
 });
 
-self.navigator.permissions.query({name:"notifications"})
-    .then(ps => {
-        app.ports.onPermissionChangeInternal.send(ps.state);
-        ps.onchange = ev => {
-            console.log(ev.target);
+self.navigator.permissions.query({ name: "notifications" }).then(ps => {
+    app.ports.onPermissionChangeInternal.send(ps.state);
+    ps.onchange = ev => {
+        console.log(ev.target);
         app.ports.onPermissionChangeInternal.send(ev.target.state);
-    } });
+    };
+});
 
 var CACHE_NAME = "elm-pwa-example-cache-v1";
-var urlsToCache = ["/", "/index.js", "/elm.js", "/base64ArrayBuffer.js"];
+var urlsToCache = [
+    "/",
+    "/index.js",
+    "/elm.js",
+    "/elm-worker.js",
+    "/vapid-public-key"
+];
 var db;
 
 // set up database

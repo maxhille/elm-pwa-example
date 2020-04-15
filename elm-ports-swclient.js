@@ -21,7 +21,9 @@ var ElmPortsSWClient = {
                 err => {
                     app.ports.registrationResponse.send("error");
                 }
-            );
+            ).catch(x => {
+                console.log(x);
+            });
         });
 
         navigator.serviceWorker.onmessage = event => {
