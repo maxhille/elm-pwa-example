@@ -38,8 +38,6 @@ var ElmPortsSWClient = {
             console.log("client snd: ", msg);
         });
 
-        app.ports.pushSubscriptionRequest.subscribe(() => {});
-
         channel.onmessage = event => {
             app.ports.onMessageInternal.send(event.data);
             console.log("client rcv: ", event.data);
@@ -48,17 +46,6 @@ var ElmPortsSWClient = {
         app.ports.requestPermissionInternal.subscribe(() => {
             Notification.requestPermission();
         });
-        
-        //app.ports.subscribeInternal.subscribe(pk => {
-        //    self.registration.pushManager
-        //        .subscribe({
-        //            userVisibleOnly: true,
-        //            applicationServerKey: pk
-        //        })
-        //        .then(subscription => {
-        //            app.ports.sendSubscriptionState.send(subscription);
-        //        });
-        //});
     }
 
 };

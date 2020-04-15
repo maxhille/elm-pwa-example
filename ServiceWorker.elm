@@ -8,7 +8,6 @@ port module ServiceWorker exposing
     , checkAvailability
     , fetch
     , getAvailability
-    , getPushSubscription
     , getRegistration
     , onClientUpdate
     , onFetchResult
@@ -156,11 +155,6 @@ getRegistration f =
     registrationResponse (registrationFromString >> f)
 
 
-getPushSubscription : Cmd msg
-getPushSubscription =
-    pushSubscriptionRequest ()
-
-
 registrationFromString : String -> Registration
 registrationFromString s =
     if s == "success" then
@@ -174,9 +168,6 @@ port availabilityResponse : (Bool -> msg) -> Sub msg
 
 
 port availabilityRequest : () -> Cmd msg
-
-
-port pushSubscriptionRequest : () -> Cmd msg
 
 
 port postMessageInternal : JE.Value -> Cmd msg

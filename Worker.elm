@@ -29,7 +29,6 @@ type alias Model =
 
 type Msg
     = DBInitialized
-    | SWSubscription (Result SW.Error SW.Subscription)
     | OnClientMessage (Result JD.Error ClientMessage)
     | SWFetchResult SW.FetchResult
     | PermissionChange P.PermissionStatus
@@ -73,15 +72,11 @@ update msg model =
         DBInitialized ->
             ( model, Cmd.none )
 
-        SWSubscription result ->
-            case result of
-                Err _ ->
-                    ( model, Cmd.none )
-
-                Ok subscription ->
-                    ( { model | subscription = subscription }, Cmd.none )
-
         OnClientMessage result ->
+            let
+                _ =
+                    Debug.log "OnClientMessage" result
+            in
             case result of
                 Err _ ->
                     ( model, Cmd.none )
@@ -115,10 +110,9 @@ clientState model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.batch
-        [ SW.onSubscriptionState SWSubscription
-        , onClientMessage OnClientMessage
+        [ onClientMessage OnClientMessage
         , SW.onFetchResult SWFetchResult
         , P.onPermissionChange PermissionChange
         ]

@@ -237,7 +237,7 @@ update msg model =
         SWRegistration registration ->
             ( { model | swRegistration = registration }
             , if registration == SW.RegistrationSuccess then
-                Cmd.batch [ W.sendMessage W.Hello, SW.getPushSubscription ]
+                Cmd.batch [ W.sendMessage W.Hello ]
 
               else
                 Cmd.none

@@ -19,6 +19,22 @@ app.ports.fetchInternal.subscribe(() => {
         });
 });
 
+app.ports.subscribeInternal.subscribe(key => {
+    var options = {
+        userVisibleOnly : true,
+        applicationServerKey : key
+    }
+    registration.pushManager
+        .subscribe(options)
+        .then(x => {
+            console.log(x);
+        })
+        .catch(x => {
+            console.log(x);
+        }) 
+
+});
+
 self.navigator.permissions.query({name:"notifications"})
     .then(ps => {
         app.ports.onPermissionChangeInternal.send(ps.state);
@@ -57,15 +73,7 @@ self.addEventListener("install", function(event) {
 
 self.addEventListener("activate", function(event) {
     // TODO try to create a Promise context in the SW-Elm
-    event.waitUntil(
-        self.clients.claim().then(
-            self.registration.pushManager
-                .getSubscription()
-                .then(subscription => {
-                    app.ports.sendSubscriptionState.send(subscription);
-                })
-        )
-    );
+    event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener("fetch", function(event) {
@@ -172,7 +180,7 @@ function notifyClients() {
 
 self.addEventListener("message", event => {
     console.log("sw rcv: ", event.data);
-    app.ports.onMessageInternal.send(JSON.stringify(event.data));
+    app.ports.onMessageInternal.send(event.data);
 });
 
 function oldOnMessage(event) {
