@@ -11,7 +11,7 @@ main =
     Platform.worker
         { init = init
         , subscriptions = subscriptions
-        , update = update
+        , update = extendedUpdate
         }
 
 
@@ -43,6 +43,15 @@ initialModel =
     }
 
 
+extendedUpdate : Msg -> Model -> ( Model, Cmd Msg )
+extendedUpdate msg model =
+    let
+        ( newModel, newCmd ) =
+            update msg model
+    in
+    ( newModel, Cmd.batch [ newCmd, updateClients newModel ] )
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -55,12 +64,9 @@ update msg model =
                     ( model, Cmd.none )
 
                 Ok subscription ->
-                    ( { model | subscription = subscription }, updateClients model )
+                    ( { model | subscription = subscription }, Cmd.none )
 
         SWClientMessage result ->
-            let
-                _ = Debug.log "sw update()" (Debug.toString result) 
-            in
             case result of
                 Ok cmsg ->
                     case cmsg of
@@ -68,21 +74,17 @@ update msg model =
                             ( model, SW.fetch )
 
                         SW.Hello ->
-                            ( model, updateClients model )
+                            ( model, Cmd.none )
 
-                Err err -> ( model, updateClients model )
+                Err err ->
+                    ( model, Cmd.none )
 
         SWFetchResult result ->
-            let
-                newModel = { model | vapidKey = Just result } 
-            in
-            ( newModel,  updateClients newModel )
+            ( model, Cmd.none )
 
         PermissionChange ps ->
-            let
-                newModel = { model | permissionStatus = Just ps } 
-            in
-            ( newModel,  updateClients newModel )
+            ( { model | permissionStatus = Just ps }, Cmd.none )
+
 
 updateClients : Model -> Cmd Msg
 updateClients model =
