@@ -4,9 +4,9 @@ import Browser
 import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events as HE
-import Json.Decode
 import Permissions as P
 import ServiceWorker as SW
+import Worker as W
 
 
 port postMessage : String -> Cmd msg
@@ -42,7 +42,7 @@ type Msg
     | SWAvailability SW.Availability
     | SWRegistration SW.Registration
     | SWClientUpdate (Result SW.Error SW.ClientState)
-    | Subscribe
+    | Subscribe String
     | RequestPermission
 
 
@@ -136,7 +136,7 @@ viewPwaInfo model =
                         Html.div []
                             [ text "Has VAPID key"
                             , Html.button
-                                [ HE.onClick Subscribe ]
+                                [ HE.onClick (Subscribe key) ]
                                 [ text "Subscribe" ]
                             ]
                 ]
@@ -169,11 +169,6 @@ viewPwaInfo model =
                 ]
             ]
         ]
-
-
-subscribe : Cmd msg
-subscribe =
-    SW.postMessage "subscribe"
 
 
 viewPost : Post -> Html Msg
@@ -242,14 +237,14 @@ update msg model =
         SWRegistration registration ->
             ( { model | swRegistration = registration }
             , if registration == SW.RegistrationSuccess then
-                Cmd.batch [ SW.postMessage "hello", SW.getPushSubscription ]
+                Cmd.batch [ W.sendMessage W.Hello, SW.getPushSubscription ]
 
               else
                 Cmd.none
             )
 
-        Subscribe ->
-            ( model, subscribe )
+        Subscribe key ->
+            ( model, W.sendMessage (W.Subscribe key) )
 
         SWClientUpdate result ->
             case result of

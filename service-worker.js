@@ -172,7 +172,7 @@ function notifyClients() {
 
 self.addEventListener("message", event => {
     console.log("sw rcv: ", event.data);
-    app.ports.onClientMessageInternal.send(JSON.stringify(event.data));
+    app.ports.onMessageInternal.send(JSON.stringify(event.data));
 });
 
 function oldOnMessage(event) {

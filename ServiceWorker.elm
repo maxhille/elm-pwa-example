@@ -1,6 +1,5 @@
 port module ServiceWorker exposing
     ( Availability(..)
-    , ClientMessage(..)
     , ClientState
     , Error
     , FetchResult
@@ -11,14 +10,14 @@ port module ServiceWorker exposing
     , getAvailability
     , getPushSubscription
     , getRegistration
-    , onClientMessage
     , onClientUpdate
     , onFetchResult
+    , onMessage
     , onSubscriptionState
     , postMessage
     , register
     , sendBroadcast
-    , subscribe
+    , subscribePush
     , updateClients
     )
 
@@ -37,11 +36,6 @@ type Registration
     = RegistrationUnknown
     | RegistrationSuccess
     | RegistrationError
-
-
-type ClientMessage
-    = Subscribe
-    | Hello
 
 
 type Subscription
@@ -74,7 +68,8 @@ type alias Error =
 updateClients : ClientState -> Cmd msg
 updateClients state =
     let
-        _ = Debug.log "sw updateClients()" (Debug.toString state) 
+        _ =
+            Debug.log "sw updateClients()" (Debug.toString state)
     in
     state
         |> encodeClientstate
@@ -86,10 +81,10 @@ encodeClientstate v =
     JE.object
         [ ( "subscription", encodeSubscription v.subscription )
         , ( "vapidKey", encodeMaybeString v.vapidKey )
-        , ( "permissionStatus",
-            Maybe.map P.permissionStatusString v.permissionStatus
-                |> encodeMaybeString 
-            )
+        , ( "permissionStatus"
+          , Maybe.map P.permissionStatusString v.permissionStatus
+                |> encodeMaybeString
+          )
         ]
 
 
@@ -146,14 +141,14 @@ fetch =
     fetchInternal ()
 
 
-subscribe : String -> Cmd msg
-subscribe s =
+subscribePush : String -> Cmd msg
+subscribePush s =
     subscribeInternal s
 
 
-postMessage : String -> Cmd msg
-postMessage s =
-    JE.string s |> postMessageInternal
+postMessage : JE.Value -> Cmd msg
+postMessage =
+    postMessageInternal
 
 
 getRegistration : (Registration -> msg) -> Sub msg
@@ -188,9 +183,6 @@ port postMessageInternal : JE.Value -> Cmd msg
 
 
 port onMessageInternal : (JD.Value -> msg) -> Sub msg
-
-
-port onClientMessageInternal : (String -> msg) -> Sub msg
 
 
 port registrationRequest : () -> Cmd msg
@@ -255,27 +247,9 @@ onClientUpdate msg =
         (JD.decodeValue decodeClientState >> mapError >> msg)
 
 
-onClientMessage : (Result Error ClientMessage -> msg) -> Sub msg
-onClientMessage msg =
-    onClientMessageInternal
-        (JD.decodeString decodeClientMessage >> mapError >> msg)
-
-
-decodeClientMessage : JD.Decoder ClientMessage
-decodeClientMessage =
-    JD.string
-        |> JD.andThen
-            (\v ->
-                case v of
-                    "subscribe" ->
-                        JD.succeed Subscribe
-
-                    "hello" ->
-                        JD.succeed Hello
-
-                    _ ->
-                        JD.fail <| "unknown message: " ++ v
-            )
+onMessage : (JD.Value -> msg) -> Sub msg
+onMessage =
+    onMessageInternal
 
 
 onFetchResult : (FetchResult -> msg) -> Sub msg
@@ -295,10 +269,12 @@ decodeClientState =
         (JD.at [ "vapidKey" ] (JD.nullable JD.string))
         (JD.at [ "permissionStatus" ] (JD.nullable decodePermissionStatus))
 
+
 decodePermissionStatus : JD.Decoder P.PermissionStatus
 decodePermissionStatus =
     JD.string
         |> JD.andThen (\s -> JD.succeed (P.permissionStatus s))
+
 
 availabilityFromBool : Bool -> Availability
 availabilityFromBool b =

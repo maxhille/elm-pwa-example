@@ -1,7 +1,12 @@
-module Worker exposing (main)
+module Worker exposing
+    ( ClientMessage(..)
+    , main
+    , sendMessage
+    )
 
 import IndexedDB
-import Json.Decode
+import Json.Decode as JD
+import Json.Encode as JE
 import Permissions as P
 import Platform
 import ServiceWorker as SW
@@ -25,14 +30,24 @@ type alias Model =
 type Msg
     = DBInitialized
     | SWSubscription (Result SW.Error SW.Subscription)
-    | SWClientMessage (Result SW.Error SW.ClientMessage)
+    | OnClientMessage (Result JD.Error ClientMessage)
     | SWFetchResult SW.FetchResult
     | PermissionChange P.PermissionStatus
 
 
+type ClientMessage
+    = Subscribe String
+    | Hello
+
+
 init : () -> ( Model, Cmd Msg )
 init flags =
-    ( initialModel, IndexedDB.open "elm-pwa-example-db" )
+    ( initialModel
+    , Cmd.batch
+        [ SW.fetch
+        , IndexedDB.open "elm-pwa-example-db"
+        ]
+    )
 
 
 initialModel : Model
@@ -60,27 +75,27 @@ update msg model =
 
         SWSubscription result ->
             case result of
-                Err s ->
+                Err _ ->
                     ( model, Cmd.none )
 
                 Ok subscription ->
                     ( { model | subscription = subscription }, Cmd.none )
 
-        SWClientMessage result ->
+        OnClientMessage result ->
             case result of
-                Ok cmsg ->
-                    case cmsg of
-                        SW.Subscribe ->
-                            ( model, SW.fetch )
-
-                        SW.Hello ->
-                            ( model, Cmd.none )
-
-                Err err ->
+                Err _ ->
                     ( model, Cmd.none )
 
-        SWFetchResult result ->
-            ( model, Cmd.none )
+                Ok cmsg ->
+                    case cmsg of
+                        Subscribe key ->
+                            ( model, SW.subscribePush key )
+
+                        Hello ->
+                            ( model, Cmd.none )
+
+        SWFetchResult vapidKey ->
+            ( { model | vapidKey = Just vapidKey }, Cmd.none )
 
         PermissionChange ps ->
             ( { model | permissionStatus = Just ps }, Cmd.none )
@@ -103,7 +118,50 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ SW.onSubscriptionState SWSubscription
-        , SW.onClientMessage SWClientMessage
+        , onClientMessage OnClientMessage
         , SW.onFetchResult SWFetchResult
         , P.onPermissionChange PermissionChange
         ]
+
+
+sendMessage : ClientMessage -> Cmd msg
+sendMessage cm =
+    cm |> encodeClientMessage |> SW.postMessage
+
+
+onClientMessage : (Result JD.Error ClientMessage -> Msg) -> Sub Msg
+onClientMessage msg =
+    SW.onMessage (JD.decodeValue decodeClientMessage >> msg)
+
+
+encodeClientMessage : ClientMessage -> JE.Value
+encodeClientMessage cm =
+    case cm of
+        Subscribe key ->
+            JE.object
+                [ ( "type", JE.string "subscribe" )
+                , ( "key", JE.string key )
+                ]
+
+        Hello ->
+            JE.object
+                [ ( "type", JE.string "hello" )
+                ]
+
+
+decodeClientMessage : JD.Decoder ClientMessage
+decodeClientMessage =
+    JD.field "type" JD.string
+        |> JD.andThen
+            (\typ ->
+                case typ of
+                    "subscribe" ->
+                        JD.field "key" JD.string
+                            |> JD.andThen (\key -> JD.succeed (Subscribe key))
+
+                    "hello" ->
+                        JD.succeed Hello
+
+                    _ ->
+                        JD.fail <| "unknown message: " ++ typ
+            )
