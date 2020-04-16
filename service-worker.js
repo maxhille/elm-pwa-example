@@ -6,7 +6,6 @@ ElmPortsIndexedDB.bind(app);
 // set up broadcast channel
 const channel = new BroadcastChannel("sw-messages");
 app.ports.postMessageInternal.subscribe(msg => {
-    console.log("sw snd: ", msg);
     channel.postMessage(msg);
 });
 app.ports.fetchInternal.subscribe(() => {
@@ -50,22 +49,7 @@ var urlsToCache = [
     "/elm-worker.js",
     "/vapid-public-key"
 ];
-var db;
 
-// set up database
-var request = indexedDB.open("elm-pwa-example-db");
-request.onerror = function(event) {
-    alert("Why didn't you allow my web app to use IndexedDB?!");
-};
-request.onsuccess = function(event) {
-    db = event.target.result;
-};
-request.onupgradeneeded = function(event) {
-    var db = event.target.result;
-    db.createObjectStore("posts", {
-        keyPath: "id"
-    });
-};
 
 self.addEventListener("install", function(event) {
     // Perform install steps
@@ -177,14 +161,7 @@ function syncPost(post) {
     });
 }
 
-function notifyClients() {
-    self.clients.matchAll().then(clients => {
-        clients.forEach(client => client.postMessage("update-db"));
-    });
-}
-
 self.addEventListener("message", event => {
-    console.log("sw rcv: ", event.data);
     app.ports.onMessageInternal.send(event.data);
 });
 

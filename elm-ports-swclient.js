@@ -37,12 +37,10 @@ var ElmPortsSWClient = {
             }
             var sw = this.registration.active;
             sw.postMessage(msg);
-            console.log("client snd: ", msg);
         });
 
         channel.onmessage = event => {
             app.ports.onMessageInternal.send(event.data);
-            console.log("client rcv: ", event.data);
         };
         
         app.ports.requestPermissionInternal.subscribe(() => {

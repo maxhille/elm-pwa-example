@@ -4,7 +4,7 @@ module Worker exposing
     , sendMessage
     )
 
-import IndexedDB
+import IndexedDB as DB
 import Json.Decode as JD
 import Json.Encode as JE
 import Permissions as P
@@ -16,7 +16,7 @@ main =
     Platform.worker
         { init = init
         , subscriptions = subscriptions
-        , update = extendedUpdate
+        , update = logUpdate extendedUpdate
         }
 
 
@@ -24,11 +24,12 @@ type alias Model =
     { subscription : SW.Subscription
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
+    , db : Maybe DB.DB
     }
 
 
 type Msg
-    = DBInitialized
+    = OnDBOpen ( DB.DB, DB.OpenResponse )
     | OnClientMessage (Result JD.Error ClientMessage)
     | SWFetchResult SW.FetchResult
     | PermissionChange P.PermissionStatus
@@ -40,21 +41,17 @@ type ClientMessage
 
 
 init : () -> ( Model, Cmd Msg )
-init flags =
-    ( initialModel
+init _ =
+    ( { subscription = SW.NoSubscription
+      , vapidKey = Nothing
+      , permissionStatus = Nothing
+      , db = Nothing
+      }
     , Cmd.batch
         [ SW.fetch
-        , IndexedDB.open "elm-pwa-example-db"
+        , DB.openRequest "elm-pwa-example-db" 1
         ]
     )
-
-
-initialModel : Model
-initialModel =
-    { subscription = SW.NoSubscription
-    , vapidKey = Nothing
-    , permissionStatus = Nothing
-    }
 
 
 extendedUpdate : Msg -> Model -> ( Model, Cmd Msg )
@@ -66,17 +63,34 @@ extendedUpdate msg model =
     ( newModel, Cmd.batch [ newCmd, updateClients newModel ] )
 
 
+logUpdate :
+    (Msg -> Model -> ( Model, Cmd Msg ))
+    -> Msg
+    -> Model
+    -> ( Model, Cmd Msg )
+logUpdate f msg model =
+    let
+        ( newModel, newCmd ) =
+            f msg model
+
+        _ =
+            Debug.log "SW update" ( msg, newModel, newCmd )
+    in
+    ( newModel, newCmd )
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        DBInitialized ->
-            ( model, Cmd.none )
+        OnDBOpen ( db, resp ) ->
+            case resp of
+                DB.Success ->
+                    ( { model | db = Just db }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         OnClientMessage result ->
-            let
-                _ =
-                    Debug.log "OnClientMessage" result
-            in
             case result of
                 Err _ ->
                     ( model, Cmd.none )
@@ -115,6 +129,7 @@ subscriptions _ =
         [ onClientMessage OnClientMessage
         , SW.onFetchResult SWFetchResult
         , P.onPermissionChange PermissionChange
+        , DB.openResponse OnDBOpen
         ]
 
 

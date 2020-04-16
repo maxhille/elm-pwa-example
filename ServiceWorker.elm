@@ -66,10 +66,6 @@ type alias Error =
 
 updateClients : ClientState -> Cmd msg
 updateClients state =
-    let
-        _ =
-            Debug.log "sw updateClients()" (Debug.toString state)
-    in
     state
         |> encodeClientstate
         |> postMessageInternal
