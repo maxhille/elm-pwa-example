@@ -18,7 +18,7 @@ var ElmPortsIndexedDB = {
                 });
             };
             request.onupgradeneeded = function(event) {
-                var db = event.target.result;
+                ElmPortsIndexedDB.dbs[opts.name] = event.target.result;
                 app.ports.openResponseInternal.send({
                     name: opts.name,
                     result: "upgrade-needed"
@@ -26,10 +26,21 @@ var ElmPortsIndexedDB = {
             };
         });
 
-        //app.ports.createObjectStore.subscribe(opts => {
-        //    db.createObjectStore("posts", {
-        //        keyPath: "id"
-        //    });
-        //});
+        app.ports.createObjectStoreInternal.subscribe(opts => {
+            var db = ElmPortsIndexedDB.dbs[opts.db];
+            db.createObjectStore(opts.name);
+            app.ports.createObjectStoreResultInternal.send(opts.name);
+        });
+
+        app.ports.queryInternal.subscribe(opts => {
+            // https://developer.mozilla.org/en-US/docs/Web/API/IDBObjectStore/get
+            var db = ElmPortsIndexedDB.dbs[opts.db];
+            var tx = db.transaction([opts.name], "readwrite");
+            var store = tx.objectStore(opts.name);
+            var req = store.get("Auth");
+            req.onsuccess = ev => {
+                app.ports.queryResultInternal.send(ev.result);
+            };
+        });
     }
 };

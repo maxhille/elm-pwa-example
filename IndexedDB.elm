@@ -1,9 +1,12 @@
 port module IndexedDB exposing
     ( DB
+    , ObjectStore
     , OpenResponse(..)
     , createObjectStore
+    , createObjectStoreResult
     , openRequest
     , openResponse
+    , query
     )
 
 import Json.Decode as JD
@@ -20,18 +23,57 @@ type alias DB =
     String
 
 
+type alias ObjectStore =
+    { db : DB
+    , name : String
+    }
+
+
+port queryInternal : JE.Value -> Cmd msg
+
+
+query : ObjectStore -> Cmd msg
+query store =
+    JE.object
+        [ ( "db", JE.string store.db )
+        , ( "name", JE.string store.name )
+        ]
+        |> queryInternal
+
+
 port openResponseInternal : (JD.Value -> msg) -> Sub msg
 
 
 port openRequestInternal : JE.Value -> Cmd msg
 
 
-port createObjectStoreInternal : () -> Cmd msg
+port createObjectStoreInternal : JE.Value -> Cmd msg
 
 
-createObjectStore : () -> Cmd msg
-createObjectStore =
-    createObjectStoreInternal
+port createObjectStoreResultInternal : (JD.Value -> msg) -> Sub msg
+
+
+createObjectStoreResult : (Result JD.Error ObjectStore -> msg) -> Sub msg
+createObjectStoreResult msg =
+    createObjectStoreResultInternal (decodeObjectStore >> msg)
+
+
+decodeObjectStore : JD.Value -> Result JD.Error ObjectStore
+decodeObjectStore =
+    JD.map2
+        (\db name -> { db = db, name = name })
+        (JD.field "db" JD.string)
+        (JD.field "name" JD.string)
+        |> JD.decodeValue
+
+
+createObjectStore : DB -> String -> Cmd msg
+createObjectStore db name =
+    JE.object
+        [ ( "db", JE.string db )
+        , ( "name", JE.string name )
+        ]
+        |> createObjectStoreInternal
 
 
 openRequest : DB -> Int -> Cmd msg

@@ -24,7 +24,6 @@ type alias Model =
     { subscription : SW.Subscription
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
-    , db : Maybe DB.DB
     }
 
 
@@ -33,6 +32,7 @@ type Msg
     | OnClientMessage (Result JD.Error ClientMessage)
     | SWFetchResult SW.FetchResult
     | PermissionChange P.PermissionStatus
+    | StoreCreated (Result JD.Error DB.ObjectStore)
 
 
 type ClientMessage
@@ -45,13 +45,17 @@ init _ =
     ( { subscription = SW.NoSubscription
       , vapidKey = Nothing
       , permissionStatus = Nothing
-      , db = Nothing
       }
     , Cmd.batch
         [ SW.fetch
-        , DB.openRequest "elm-pwa-example-db" 1
+        , openDb
         ]
     )
+
+
+openDb : Cmd Msg
+openDb =
+    DB.openRequest "elm-pwa-example-db" 1
 
 
 extendedUpdate : Msg -> Model -> ( Model, Cmd Msg )
@@ -84,11 +88,17 @@ update msg model =
     case msg of
         OnDBOpen ( db, resp ) ->
             case resp of
+                DB.UpgradeNeeded ->
+                    ( model, DB.createObjectStore db "auth" )
+
                 DB.Success ->
-                    ( { model | db = Just db }, Cmd.none )
+                    ( model, DB.query { db = db, name = "auth" } )
 
                 _ ->
                     ( model, Cmd.none )
+
+        StoreCreated store ->
+            ( model, openDb )
 
         OnClientMessage result ->
             case result of
@@ -115,6 +125,11 @@ updateClients model =
     clientState model |> SW.updateClients
 
 
+getAuth : DB.ObjectStore -> Cmd Msg
+getAuth =
+    DB.query
+
+
 clientState : Model -> SW.ClientState
 clientState model =
     { subscription = model.subscription
@@ -130,6 +145,7 @@ subscriptions _ =
         , SW.onFetchResult SWFetchResult
         , P.onPermissionChange PermissionChange
         , DB.openResponse OnDBOpen
+        , DB.createObjectStoreResult StoreCreated
         ]
 
 
