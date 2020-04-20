@@ -33,6 +33,7 @@ type Msg
     | SWFetchResult SW.FetchResult
     | PermissionChange P.PermissionStatus
     | StoreCreated (Result JD.Error DB.ObjectStore)
+    | QueryResponse (Result JD.Error DB.QueryResponse)
 
 
 type ClientMessage
@@ -100,6 +101,9 @@ update msg model =
         StoreCreated store ->
             ( model, openDb )
 
+        QueryResponse _ ->
+            ( model, Cmd.none )
+
         OnClientMessage result ->
             case result of
                 Err _ ->
@@ -125,11 +129,6 @@ updateClients model =
     clientState model |> SW.updateClients
 
 
-getAuth : DB.ObjectStore -> Cmd Msg
-getAuth =
-    DB.query
-
-
 clientState : Model -> SW.ClientState
 clientState model =
     { subscription = model.subscription
@@ -146,6 +145,7 @@ subscriptions _ =
         , P.onPermissionChange PermissionChange
         , DB.openResponse OnDBOpen
         , DB.createObjectStoreResult StoreCreated
+        , DB.queryResponse QueryResponse
         ]
 
 
