@@ -1,4 +1,4 @@
-module Worker exposing
+port module Worker exposing
     ( ClientMessage(..)
     , main
     , sendMessage
@@ -10,6 +10,18 @@ import Json.Encode as JE
 import Permissions as P
 import Platform
 import ServiceWorker as SW
+
+
+port getVapidKey : () -> Cmd msg
+
+
+port onVapidkeyResult : (String -> msg) -> Sub msg
+
+
+port login : JE.Value -> Cmd msg
+
+
+port onLoginResult : (JD.Value -> msg) -> Sub msg
 
 
 main =
@@ -30,10 +42,17 @@ type alias Model =
 type Msg
     = OnDBOpen ( DB.DB, DB.OpenResponse )
     | OnClientMessage (Result JD.Error ClientMessage)
-    | SWFetchResult SW.FetchResult
+    | VapidkeyResult String
     | PermissionChange P.PermissionStatus
     | StoreCreated (Result JD.Error DB.ObjectStore)
     | QueryResponse (Result JD.Error DB.QueryResponse)
+    | LoginResult (Result JD.Error Auth)
+
+
+type alias Auth =
+    { name : String
+    , token : String
+    }
 
 
 type ClientMessage
@@ -48,7 +67,7 @@ init _ =
       , permissionStatus = Nothing
       }
     , Cmd.batch
-        [ SW.fetch
+        [ getVapidKey ()
         , openDb
         ]
     )
@@ -101,8 +120,22 @@ update msg model =
         StoreCreated store ->
             ( model, openDb )
 
-        QueryResponse _ ->
-            ( model, Cmd.none )
+        QueryResponse result ->
+            case result of
+                Err _ ->
+                    ( model, Cmd.none )
+
+                Ok auth ->
+                    ( model, login (JE.object [ ( "name", JE.string "John Doe" ) ]) )
+
+        LoginResult result ->
+            case result of
+                Err _ ->
+                    ( model, Cmd.none )
+
+                Ok auth ->
+                    {- TODO write auth to DB, do same stuff as above -}
+                    ( model, Cmd.none )
 
         OnClientMessage result ->
             case result of
@@ -117,8 +150,8 @@ update msg model =
                         Hello ->
                             ( model, Cmd.none )
 
-        SWFetchResult vapidKey ->
-            ( { model | vapidKey = Just vapidKey }, Cmd.none )
+        VapidkeyResult s ->
+            ( { model | vapidKey = Just s }, Cmd.none )
 
         PermissionChange ps ->
             ( { model | permissionStatus = Just ps }, Cmd.none )
@@ -141,12 +174,18 @@ subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ onClientMessage OnClientMessage
-        , SW.onFetchResult SWFetchResult
+        , onVapidkeyResult VapidkeyResult
+        , onLoginResult (decodeLoginResult >> LoginResult)
         , P.onPermissionChange PermissionChange
         , DB.openResponse OnDBOpen
         , DB.createObjectStoreResult StoreCreated
         , DB.queryResponse QueryResponse
         ]
+
+
+decodeLoginResult : JD.Value -> Result JD.Error Auth
+decodeLoginResult _ =
+    Ok { name = "Not implemented", token = "Not implemented" }
 
 
 sendMessage : ClientMessage -> Cmd msg

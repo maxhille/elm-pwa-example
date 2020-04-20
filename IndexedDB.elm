@@ -47,16 +47,16 @@ query store =
         |> queryInternal
 
 
-port queryResponseInternal : (JD.Value -> msg) -> Sub msg
+port queryResultInternal : (JD.Value -> msg) -> Sub msg
 
 
 queryResponse : (Result JD.Error QueryResponse -> msg) -> Sub msg
 queryResponse msg =
-    queryResponseInternal (decodeQueryResponse >> msg)
+    queryResultInternal (decodeQueryResult >> msg)
 
 
-decodeQueryResponse : JD.Value -> Result JD.Error QueryResponse
-decodeQueryResponse =
+decodeQueryResult : JD.Value -> Result JD.Error QueryResponse
+decodeQueryResult =
     JD.decodeValue
         (JD.succeed Result)
 

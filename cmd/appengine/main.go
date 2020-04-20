@@ -8,7 +8,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/google/uuid"
-	"github.com/maxhille/elm-pwa-example/server"
 
 	cloudtasks "cloud.google.com/go/cloudtasks/apiv2beta3"
 	"cloud.google.com/go/datastore"

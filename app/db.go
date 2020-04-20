@@ -17,8 +17,8 @@ type DB interface {
 	PutUser(context.Context, User) error
 	PutSubscription(context.Context, Subscription, User) error
 	GetSubscriptions(context.Context) ([]Subscription, error)
-	GetKey(context.Context) (KeyPair, error)
-	PutKey(context.Context, KeyPair) error
+	GetKey(context.Context) (*KeyPair, error)
+	PutKey(context.Context, *KeyPair) error
 	GetPosts(context.Context) ([]Post, error)
 	PutPost(context.Context, Post) error
 }

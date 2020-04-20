@@ -2,15 +2,12 @@ port module ServiceWorker exposing
     ( Availability(..)
     , ClientState
     , Error
-    , FetchResult
     , Registration(..)
     , Subscription(..)
     , checkAvailability
-    , fetch
     , getAvailability
     , getRegistration
     , onClientUpdate
-    , onFetchResult
     , onMessage
     , onSubscriptionState
     , postMessage
@@ -54,10 +51,6 @@ type alias ClientState =
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     }
-
-
-type alias FetchResult =
-    String
 
 
 type alias Error =
@@ -131,11 +124,6 @@ register =
     registrationRequest ()
 
 
-fetch : Cmd msg
-fetch =
-    fetchInternal ()
-
-
 subscribePush : String -> Cmd msg
 subscribePush s =
     subscribeInternal s
@@ -173,12 +161,6 @@ port onMessageInternal : (JD.Value -> msg) -> Sub msg
 
 
 port registrationRequest : () -> Cmd msg
-
-
-port fetchInternal : () -> Cmd msg
-
-
-port onFetchResultInternal : (String -> msg) -> Sub msg
 
 
 port registrationResponse : (String -> msg) -> Sub msg
@@ -237,16 +219,6 @@ onClientUpdate msg =
 onMessage : (JD.Value -> msg) -> Sub msg
 onMessage =
     onMessageInternal
-
-
-onFetchResult : (FetchResult -> msg) -> Sub msg
-onFetchResult msg =
-    onFetchResultInternal (decodeFetchResult >> msg)
-
-
-decodeFetchResult : String -> FetchResult
-decodeFetchResult s =
-    s
 
 
 decodeClientState : JD.Decoder ClientState

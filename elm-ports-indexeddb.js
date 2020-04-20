@@ -39,7 +39,7 @@ var ElmPortsIndexedDB = {
             var store = tx.objectStore(opts.name);
             var req = store.get("Auth");
             req.onsuccess = ev => {
-                app.ports.queryResultInternal.send(ev.result);
+                app.ports.queryResultInternal.send({});
             };
         });
     }

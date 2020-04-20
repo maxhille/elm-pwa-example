@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/asdine/storm/v3"
 	"github.com/google/uuid"
 	"github.com/maxhille/elm-pwa-example/app"
 )
@@ -13,17 +14,12 @@ func main() {
 	// for local dev
 	http.Handle("/", LoggingHandler{http.FileServer(newPublicFileSystem())})
 
-	db := &LocalDB{
-		keyPair: &app.KeyPair{
-			PK: "BDRhEg7bDxxreAwuUgr2zzwx7_CzYZR1xr8Q2xIVJD8o8ida48HjWrZPLk1_QSw9aDzjtMf0vDvaBEQYaFmqGdo",
-			SK: "uIzZugiNNxVTW24JheKfCJ6fHwtKBGSPTCek-QOupjo",
-		},
-	}
-
+	db, _ := newLocalDB()
+	defer db.close()
 	app := app.New(
 		db,
 		&LocalTasks{},
-		&LocalAuth{},
+		&LocalAuth{db},
 		&LocalHandler{},
 	)
 
@@ -104,20 +100,33 @@ func (lh *LocalHandler) ListenAndServe(port string,
 }
 
 type LocalDB struct {
-	keyPair *app.KeyPair
+	db *storm.DB
 }
 
-func (db *LocalDB) GetKey(ctx context.Context) (app.KeyPair, error) {
-	if db.keyPair == nil {
-		return app.KeyPair{}, app.ErrNoSuchEntity
+func newLocalDB() (*LocalDB, error) {
+	db, err := storm.Open(".storm.db")
+	if err != nil {
+		return nil, err
 	}
-	return *db.keyPair, nil
+	return &LocalDB{db}, nil
 }
 
-func (db *LocalDB) PutKey(ctx context.Context, k app.KeyPair) error {
-	log.Printf("saving new keypair: %v", k)
-	db.keyPair = &k
-	return nil
+func (db *LocalDB) close() {
+	db.db.Close()
+}
+
+func (db *LocalDB) GetKey(ctx context.Context) (*app.KeyPair, error) {
+	kp := app.KeyPair{}
+	err := db.db.Get("keypair", 0, &kp)
+	if err != nil {
+		return nil, app.ErrNoSuchEntity
+	}
+	return &kp, nil
+}
+
+func (db *LocalDB) PutKey(ctx context.Context, kp *app.KeyPair) error {
+	log.Printf("saving new keypair: %v", kp)
+	return db.db.Set("keypair", 0, kp)
 }
 
 func (db *LocalDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
@@ -162,6 +171,10 @@ func (db *LocalDB) PutPost(ctx context.Context, p app.Post) error {
 	return nil
 }
 
+func (db *LocalDB) saveLogin(name string, token string) error {
+	return db.db.Set("logins", token, name)
+}
+
 type LocalTasks struct {
 	app.Tasks
 }
@@ -172,11 +185,17 @@ func (ct *LocalTasks) Notify(ctx context.Context) error {
 }
 
 type LocalAuth struct {
-	app.Auth
+	db *LocalDB
 }
 
 func (ga *LocalAuth) Current(ctx context.Context) app.User {
 	// TODO migrate somewhere new, was
 	//	return guser.Current(ctx)
 	return app.User{}
+}
+
+func (la *LocalAuth) Login(ctx context.Context, name string) (*app.NameToken,
+	error) {
+	err := la.db.saveLogin(name, "dummy-token")
+	return &app.NameToken{Name: name, Token: "dummy-token"}, err
 }

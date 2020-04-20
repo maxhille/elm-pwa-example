@@ -8,13 +8,27 @@ const channel = new BroadcastChannel("sw-messages");
 app.ports.postMessageInternal.subscribe(msg => {
     channel.postMessage(msg);
 });
-app.ports.fetchInternal.subscribe(() => {
+
+// TODO abstract Fetch
+app.ports.getVapidKey.subscribe(() => {
     fetch("vapid-public-key")
         .then(response => {
             return response.text();
         })
         .then(function(text) {
-            app.ports.onFetchResultInternal.send(text);
+            app.ports.onVapidkeyResult.send(text);
+        });
+});
+app.ports.login.subscribe(opts => {
+    fetch("/api/auth", {
+        method: 'POST',
+        body: JSON.stringify(opts)
+    })
+        .then(response => {
+            return response.json();
+        })
+        .then(function(json) {
+            app.ports.onLoginResult.send(json);
         });
 });
 

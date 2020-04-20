@@ -55,6 +55,7 @@ func (app *App) Run(port string) error {
 	app.http.HandleFunc("/api/subscription", app.putSubscription)
 	app.http.HandleFunc("/api/post", app.putPost)
 	app.http.HandleFunc("/api/posts", app.getPosts)
+	app.http.HandleFunc("/api/auth", app.postAuth)
 
 	return app.http.ListenAndServe(":"+port, nil)
 }
@@ -115,6 +116,36 @@ func (app *App) putSubscription(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(msg))
 		return
 	}
+}
+
+func (app *App) postAuth(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	nt := &NameToken{}
+	err := json.NewDecoder(req.Body).Decode(nt)
+	if err != nil {
+		msg := fmt.Sprintf("could not decode json body: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(msg))
+		return
+	}
+
+	nt, err = app.auth.Login(ctx, nt.Name)
+	if err != nil {
+		msg := fmt.Sprintf("could not get posts from db: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(msg))
+		return
+	}
+
+	json, err := json.Marshal(nt)
+	if err != nil {
+		msg := fmt.Sprintf("could not marshal posts (%v)", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(msg))
+		return
+	}
+	w.Write(json)
 }
 
 func (app *App) getPosts(w http.ResponseWriter, req *http.Request) {
