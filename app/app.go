@@ -74,6 +74,7 @@ func (app *App) getPublicKey(w http.ResponseWriter, req *http.Request) {
 			w.Write([]byte(msg))
 			return
 		}
+		log.Printf("key: %v", k)
 		k.PK = pk
 		k.SK = sk
 		err2 = app.db.PutKey(ctx, k)

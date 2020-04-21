@@ -115,18 +115,18 @@ func (db *LocalDB) close() {
 	db.db.Close()
 }
 
-func (db *LocalDB) GetKey(ctx context.Context) (*app.KeyPair, error) {
+func (db *LocalDB) GetKey(ctx context.Context) (app.KeyPair, error) {
 	kp := app.KeyPair{}
 	err := db.db.Get("keypair", 0, &kp)
 	if err != nil {
-		return nil, app.ErrNoSuchEntity
+		return kp, app.ErrNoSuchEntity
 	}
-	return &kp, nil
+	return kp, nil
 }
 
-func (db *LocalDB) PutKey(ctx context.Context, kp *app.KeyPair) error {
+func (db *LocalDB) PutKey(ctx context.Context, kp app.KeyPair) error {
 	log.Printf("saving new keypair: %v", kp)
-	return db.db.Set("keypair", 0, kp)
+	return db.db.Set("keypair", 0, &kp)
 }
 
 func (db *LocalDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
