@@ -1,6 +1,9 @@
 port module Worker exposing
-    ( ClientMessage(..)
+    ( Auth(..)
+    , ClientMessage(..)
+    , ClientState
     , main
+    , onClientUpdate
     , sendMessage
     )
 
@@ -36,6 +39,7 @@ type alias Model =
     { subscription : SW.Subscription
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
+    , auth : Maybe Auth
     }
 
 
@@ -45,19 +49,121 @@ type Msg
     | VapidkeyResult String
     | PermissionChange P.PermissionStatus
     | StoreCreated (Result JD.Error DB.ObjectStore)
-    | QueryResponse (Result JD.Error DB.QueryResponse)
+    | QueryResult DB.QueryResult
     | LoginResult (Result JD.Error Auth)
 
 
-type alias Auth =
-    { name : String
-    , token : String
-    }
+type Auth
+    = LoggedOut
+    | LoggedIn
+        { name : String
+        , token : String
+        }
 
 
 type ClientMessage
     = Subscribe String
     | Hello
+    | Login String
+
+
+type alias ClientState =
+    { subscription : SW.Subscription
+    , vapidKey : Maybe String
+    , permissionStatus : Maybe P.PermissionStatus
+    , auth : Maybe Auth
+    }
+
+
+onClientUpdate : (Result JD.Error ClientState -> msg) -> Sub msg
+onClientUpdate msg =
+    SW.onMessage
+        (JD.decodeValue decodeClientState >> msg)
+
+
+encodeMaybeString : Maybe String -> JE.Value
+encodeMaybeString ms =
+    case ms of
+        Nothing ->
+            JE.null
+
+        Just s ->
+            JE.string s
+
+
+encodeSubscription : SW.Subscription -> JE.Value
+encodeSubscription subscription =
+    case subscription of
+        SW.NoSubscription ->
+            JE.object [ ( "type", JE.string "none" ) ]
+
+        SW.Subscribed data ->
+            JE.object
+                [ ( "type", JE.string "subscribed" )
+                , ( "data"
+                  , JE.object
+                        [ ( "auth", JE.string data.auth )
+                        , ( "p256dh", JE.string data.p256dh )
+                        , ( "endpoint", JE.string data.endpoint )
+                        ]
+                  )
+                ]
+
+
+encodeAuth : Maybe Auth -> JE.Value
+encodeAuth maybe =
+    case maybe of
+        Nothing ->
+            JE.null
+
+        Just auth ->
+            case auth of
+                LoggedIn _ ->
+                    JE.string "logged-in"
+
+                LoggedOut ->
+                    JE.string "logged-out"
+
+
+subscriptionDataDecoder : JD.Decoder SW.SubscriptionData
+subscriptionDataDecoder =
+    JD.map3 SW.SubscriptionData
+        (JD.at [ "auth" ] JD.string)
+        (JD.at [ "p256dh" ] JD.string)
+        (JD.at [ "endpoint" ] JD.string)
+
+
+decodePermissionStatus : JD.Decoder P.PermissionStatus
+decodePermissionStatus =
+    JD.string
+        |> JD.andThen (\s -> JD.succeed (P.permissionStatus s))
+
+
+decodeClientState : JD.Decoder ClientState
+decodeClientState =
+    JD.map4 ClientState
+        (JD.at [ "subscription" ] SW.decodeSubscription)
+        (JD.at [ "vapidKey" ] (JD.nullable JD.string))
+        (JD.at [ "permissionStatus" ] (JD.nullable decodePermissionStatus))
+        (JD.at [ "auth" ] (JD.nullable decodeAuth))
+
+
+decodeAuth : JD.Decoder Auth
+decodeAuth =
+    JD.succeed LoggedOut
+
+
+encodeClientstate : ClientState -> JE.Value
+encodeClientstate v =
+    JE.object
+        [ ( "subscription", encodeSubscription v.subscription )
+        , ( "vapidKey", encodeMaybeString v.vapidKey )
+        , ( "permissionStatus"
+          , Maybe.map P.permissionStatusString v.permissionStatus
+                |> encodeMaybeString
+          )
+        , ( "auth", encodeAuth v.auth )
+        ]
 
 
 init : () -> ( Model, Cmd Msg )
@@ -65,6 +171,7 @@ init _ =
     ( { subscription = SW.NoSubscription
       , vapidKey = Nothing
       , permissionStatus = Nothing
+      , auth = Just LoggedOut
       }
     , Cmd.batch
         [ getVapidKey ()
@@ -120,22 +227,15 @@ update msg model =
         StoreCreated store ->
             ( model, openDb )
 
-        QueryResponse result ->
-            case result of
-                Err _ ->
-                    ( model, Cmd.none )
+        QueryResult json ->
+            ( model, Cmd.none )
 
-                Ok auth ->
-                    ( model, login (JE.object [ ( "name", JE.string "John Doe" ) ]) )
+        LoginResult (Err _) ->
+            ( model, Cmd.none )
 
-        LoginResult result ->
-            case result of
-                Err _ ->
-                    ( model, Cmd.none )
-
-                Ok auth ->
-                    {- TODO write auth to DB, do same stuff as above -}
-                    ( model, Cmd.none )
+        LoginResult (Ok auth) ->
+            {- TODO write auth to DB, do same stuff as above -}
+            ( model, Cmd.none )
 
         OnClientMessage result ->
             case result of
@@ -150,6 +250,15 @@ update msg model =
                         Hello ->
                             ( model, Cmd.none )
 
+                        Login name ->
+                            ( model
+                            , login
+                                (JE.object
+                                    [ ( "name", JE.string name )
+                                    ]
+                                )
+                            )
+
         VapidkeyResult s ->
             ( { model | vapidKey = Just s }, Cmd.none )
 
@@ -159,14 +268,17 @@ update msg model =
 
 updateClients : Model -> Cmd Msg
 updateClients model =
-    clientState model |> SW.updateClients
+    clientState model
+        |> encodeClientstate
+        |> SW.postMessage
 
 
-clientState : Model -> SW.ClientState
+clientState : Model -> ClientState
 clientState model =
     { subscription = model.subscription
     , vapidKey = model.vapidKey
     , permissionStatus = model.permissionStatus
+    , auth = model.auth
     }
 
 
@@ -179,13 +291,13 @@ subscriptions _ =
         , P.onPermissionChange PermissionChange
         , DB.openResponse OnDBOpen
         , DB.createObjectStoreResult StoreCreated
-        , DB.queryResponse QueryResponse
+        , DB.queryResult QueryResult
         ]
 
 
 decodeLoginResult : JD.Value -> Result JD.Error Auth
 decodeLoginResult _ =
-    Ok { name = "Not implemented", token = "Not implemented" }
+    Ok LoggedOut
 
 
 sendMessage : ClientMessage -> Cmd msg
@@ -207,6 +319,12 @@ encodeClientMessage cm =
                 , ( "key", JE.string key )
                 ]
 
+        Login name ->
+            JE.object
+                [ ( "type", JE.string "login" )
+                , ( "name", JE.string name )
+                ]
+
         Hello ->
             JE.object
                 [ ( "type", JE.string "hello" )
@@ -222,6 +340,10 @@ decodeClientMessage =
                     "subscribe" ->
                         JD.field "key" JD.string
                             |> JD.andThen (\key -> JD.succeed (Subscribe key))
+
+                    "login" ->
+                        JD.field "name" JD.string
+                            |> JD.andThen (\name -> JD.succeed (Login name))
 
                     "hello" ->
                         JD.succeed Hello

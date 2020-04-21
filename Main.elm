@@ -4,6 +4,7 @@ import Browser
 import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events as HE
+import Json.Decode as JD
 import Permissions as P
 import ServiceWorker as SW
 import Worker as W
@@ -26,6 +27,13 @@ type alias Model =
     , swSubsciption : SW.Subscription
     , swVapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
+    , loggedIn : Maybe Bool
+    , loginForm : LoginForm
+    }
+
+
+type alias LoginForm =
+    { name : String
     }
 
 
@@ -41,9 +49,11 @@ type Msg
     | PostsChanged (List Post)
     | SWAvailability SW.Availability
     | SWRegistration SW.Registration
-    | SWClientUpdate (Result SW.Error SW.ClientState)
+    | SWClientUpdate (Result JD.Error W.ClientState)
     | Subscribe String
     | RequestPermission
+    | ChangedName String
+    | Login
 
 
 main : Program () Model Msg
@@ -62,22 +72,53 @@ view model =
     , body =
         [ Html.div []
             [ viewPwaInfo model
-            , Html.h1 []
-                [ text "Hello Elm PWA Example!"
-                ]
-            , Html.ul []
-                (List.map viewPost model.posts)
-            , Html.form [ HE.onSubmit SendAndClear ]
-                [ Html.input
-                    [ HA.value model.text
-                    , HE.onInput (\input -> TextChanged input)
-                    ]
-                    []
-                , Html.input [ HA.type_ "submit", HA.value "Senden" ] []
-                ]
+            , Html.h1 [] [ text "Hello Elm PWA Example!" ]
+            , case model.loggedIn of
+                Nothing ->
+                    text "getting log in state..."
+
+                Just b ->
+                    if b then
+                        viewChat model
+
+                    else
+                        viewLogin model.loginForm
             ]
         ]
     }
+
+
+viewLogin : LoginForm -> Html Msg
+viewLogin form =
+    Html.div []
+        [ Html.form [ HE.onSubmit Login ]
+            [ Html.fieldset []
+                [ Html.input
+                    [ HA.value form.name
+                    , HE.onInput ChangedName
+                    , HA.placeholder "username"
+                    ]
+                    []
+                ]
+            , Html.button [] [ text "log in" ]
+            ]
+        ]
+
+
+viewChat : Model -> Html Msg
+viewChat model =
+    Html.div []
+        [ Html.ul []
+            (List.map viewPost model.posts)
+        , Html.form [ HE.onSubmit SendAndClear ]
+            [ Html.input
+                [ HA.value model.text
+                , HE.onInput (\input -> TextChanged input)
+                ]
+                []
+            , Html.input [ HA.type_ "submit", HA.value "Senden" ] []
+            ]
+        ]
 
 
 viewPwaInfo : Model -> Html Msg
@@ -195,6 +236,8 @@ init _ =
       , swSubsciption = SW.NoSubscription
       , swVapidKey = Nothing
       , permissionStatus = Nothing
+      , loginForm = { name = "" }
+      , loggedIn = Nothing
       }
     , SW.checkAvailability
     )
@@ -205,8 +248,14 @@ subscriptions _ =
     Sub.batch
         [ SW.getAvailability SWAvailability
         , SW.getRegistration SWRegistration
-        , SW.onClientUpdate SWClientUpdate
+        , W.onClientUpdate SWClientUpdate
         ]
+
+
+login : LoginForm -> Cmd msg
+login form =
+    W.Login form.name
+        |> W.sendMessage
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -220,6 +269,19 @@ update msg model =
 
         PostsChanged newPosts ->
             ( { model | posts = newPosts }, Cmd.none )
+
+        ChangedName name ->
+            let
+                oldForm =
+                    model.loginForm
+
+                newForm =
+                    { oldForm | name = name }
+            in
+            ( { model | loginForm = newForm }, Cmd.none )
+
+        Login ->
+            ( model, login model.loginForm )
 
         SWAvailability availability ->
             ( { model | swavailability = availability }
@@ -256,6 +318,17 @@ update msg model =
                         | swSubsciption = cu.subscription
                         , swVapidKey = cu.vapidKey
                         , permissionStatus = cu.permissionStatus
+                        , loggedIn =
+                            Maybe.map
+                                (\auth ->
+                                    case auth of
+                                        W.LoggedOut ->
+                                            False
+
+                                        W.LoggedIn _ ->
+                                            True
+                                )
+                                cu.auth
                       }
                     , Cmd.none
                     )

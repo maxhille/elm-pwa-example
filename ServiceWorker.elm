@@ -1,25 +1,23 @@
 port module ServiceWorker exposing
     ( Availability(..)
-    , ClientState
     , Error
     , Registration(..)
     , Subscription(..)
+    , SubscriptionData
     , checkAvailability
+    , decodeSubscription
     , getAvailability
     , getRegistration
-    , onClientUpdate
     , onMessage
     , onSubscriptionState
     , postMessage
     , register
     , sendBroadcast
     , subscribePush
-    , updateClients
     )
 
 import Json.Decode as JD
 import Json.Encode as JE
-import Permissions as P
 
 
 type Availability
@@ -46,63 +44,8 @@ type alias SubscriptionData =
     }
 
 
-type alias ClientState =
-    { subscription : Subscription
-    , vapidKey : Maybe String
-    , permissionStatus : Maybe P.PermissionStatus
-    }
-
-
 type alias Error =
     String
-
-
-updateClients : ClientState -> Cmd msg
-updateClients state =
-    state
-        |> encodeClientstate
-        |> postMessageInternal
-
-
-encodeClientstate : ClientState -> JE.Value
-encodeClientstate v =
-    JE.object
-        [ ( "subscription", encodeSubscription v.subscription )
-        , ( "vapidKey", encodeMaybeString v.vapidKey )
-        , ( "permissionStatus"
-          , Maybe.map P.permissionStatusString v.permissionStatus
-                |> encodeMaybeString
-          )
-        ]
-
-
-encodeMaybeString : Maybe String -> JE.Value
-encodeMaybeString ms =
-    case ms of
-        Nothing ->
-            JE.null
-
-        Just s ->
-            JE.string s
-
-
-encodeSubscription : Subscription -> JE.Value
-encodeSubscription subscription =
-    case subscription of
-        NoSubscription ->
-            JE.object [ ( "type", JE.string "none" ) ]
-
-        Subscribed data ->
-            JE.object
-                [ ( "type", JE.string "subscribed" )
-                , ( "data"
-                  , JE.object
-                        [ ( "auth", JE.string data.auth )
-                        , ( "p256dh", JE.string data.p256dh )
-                        , ( "endpoint", JE.string data.endpoint )
-                        ]
-                  )
-                ]
 
 
 decodeSubscription : JD.Decoder Subscription
@@ -175,9 +118,6 @@ port onSubscriptionStateInternal : (JD.Value -> msg) -> Sub msg
 port sendBroadcast : Bool -> Cmd msg
 
 
-port receiveBroadcast : (Bool -> msg) -> Sub msg
-
-
 onSubscriptionState : (Result Error Subscription -> msg) -> Sub msg
 onSubscriptionState msg =
     onSubscriptionStateInternal
@@ -192,14 +132,6 @@ mapError =
     Result.mapError JD.errorToString
 
 
-subscriptionDataDecoder : JD.Decoder SubscriptionData
-subscriptionDataDecoder =
-    JD.map3 SubscriptionData
-        (JD.at [ "auth" ] JD.string)
-        (JD.at [ "p256dh" ] JD.string)
-        (JD.at [ "endpoint" ] JD.string)
-
-
 checkAvailability : Cmd msg
 checkAvailability =
     availabilityRequest ()
@@ -210,29 +142,9 @@ getAvailability msg =
     availabilityResponse (availabilityFromBool >> msg)
 
 
-onClientUpdate : (Result Error ClientState -> msg) -> Sub msg
-onClientUpdate msg =
-    onMessageInternal
-        (JD.decodeValue decodeClientState >> mapError >> msg)
-
-
 onMessage : (JD.Value -> msg) -> Sub msg
 onMessage =
     onMessageInternal
-
-
-decodeClientState : JD.Decoder ClientState
-decodeClientState =
-    JD.map3 ClientState
-        (JD.at [ "subscription" ] decodeSubscription)
-        (JD.at [ "vapidKey" ] (JD.nullable JD.string))
-        (JD.at [ "permissionStatus" ] (JD.nullable decodePermissionStatus))
-
-
-decodePermissionStatus : JD.Decoder P.PermissionStatus
-decodePermissionStatus =
-    JD.string
-        |> JD.andThen (\s -> JD.succeed (P.permissionStatus s))
 
 
 availabilityFromBool : Bool -> Availability

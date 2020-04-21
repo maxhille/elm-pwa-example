@@ -2,13 +2,13 @@ port module IndexedDB exposing
     ( DB
     , ObjectStore
     , OpenResponse(..)
-    , QueryResponse(..)
+    , QueryResult
     , createObjectStore
     , createObjectStoreResult
     , openRequest
     , openResponse
     , query
-    , queryResponse
+    , queryResult
     )
 
 import Json.Decode as JD
@@ -21,8 +21,8 @@ type OpenResponse
     | Error
 
 
-type QueryResponse
-    = Result
+type alias QueryResult =
+    JD.Value
 
 
 type alias DB =
@@ -50,15 +50,9 @@ query store =
 port queryResultInternal : (JD.Value -> msg) -> Sub msg
 
 
-queryResponse : (Result JD.Error QueryResponse -> msg) -> Sub msg
-queryResponse msg =
-    queryResultInternal (decodeQueryResult >> msg)
-
-
-decodeQueryResult : JD.Value -> Result JD.Error QueryResponse
-decodeQueryResult =
-    JD.decodeValue
-        (JD.succeed Result)
+queryResult : (QueryResult -> msg) -> Sub msg
+queryResult =
+    queryResultInternal
 
 
 port openResponseInternal : (JD.Value -> msg) -> Sub msg
