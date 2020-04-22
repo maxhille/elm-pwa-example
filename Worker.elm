@@ -41,6 +41,8 @@ type alias Model =
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     , auth : Maybe Auth
+    , db : Maybe DB.DB
+    , authSaved : Bool
     }
 
 
@@ -119,11 +121,36 @@ encodeAuth maybe =
 
         Just auth ->
             case auth of
-                LoggedIn _ ->
-                    JE.string "logged-in"
+                LoggedIn data ->
+                    JE.object
+                        [ ( "type", JE.string "logged-in" )
+                        , ( "name", JE.string data.name )
+                        , ( "token", JE.string data.token )
+                        ]
 
                 LoggedOut ->
-                    JE.string "logged-out"
+                    JE.object
+                        [ ( "type", JE.string "logged-out" )
+                        ]
+
+
+decodeAuth : JD.Decoder Auth
+decodeAuth =
+    JD.field "type" JD.string
+        |> JD.andThen
+            (\typ ->
+                case typ of
+                    "logged-in" ->
+                        JD.map2 (\name token -> LoggedIn { name = name, token = token })
+                            (JD.field "name" JD.string)
+                            (JD.field "token" JD.string)
+
+                    "logged-out" ->
+                        JD.succeed LoggedOut
+
+                    _ ->
+                        JD.fail <| "unknown message: " ++ typ
+            )
 
 
 subscriptionDataDecoder : JD.Decoder SW.SubscriptionData
@@ -149,11 +176,6 @@ decodeClientState =
         (JD.at [ "auth" ] (JD.nullable decodeAuth))
 
 
-decodeAuth : JD.Decoder Auth
-decodeAuth =
-    JD.succeed LoggedOut
-
-
 encodeClientstate : ClientState -> JE.Value
 encodeClientstate v =
     JE.object
@@ -173,6 +195,8 @@ init _ =
       , vapidKey = Nothing
       , permissionStatus = Nothing
       , auth = Just LoggedOut
+      , db = Nothing
+      , authSaved = False
       }
     , Cmd.batch
         [ getVapidKey ()
@@ -192,7 +216,37 @@ extendedUpdate msg model =
         ( newModel, newCmd ) =
             update msg model
     in
-    ( newModel, Cmd.batch [ newCmd, updateClients newModel ] )
+    ( newModel
+    , Cmd.batch
+        [ newCmd
+        , updateClients newModel
+        , saveAuth newModel
+        ]
+    )
+
+
+saveAuth : Model -> Cmd Msg
+saveAuth model =
+    if model.authSaved then
+        Cmd.none
+
+    else
+        case model.auth of
+            Nothing ->
+                Cmd.none
+
+            Just auth ->
+                case model.db of
+                    Nothing ->
+                        Cmd.none
+
+                    Just db ->
+                        putAuth db auth
+
+
+putAuth : DB.DB -> Auth -> Cmd Msg
+putAuth db auth =
+    DB.put { db = db, name = "auth" } "key" (encodeAuth (Just auth))
 
 
 logUpdate :
@@ -220,7 +274,7 @@ update msg model =
                     ( model, DB.createObjectStore db "auth" )
 
                 DB.Success ->
-                    ( model, DB.query { db = db, name = "auth" } )
+                    ( { model | db = Just db }, DB.query { db = db, name = "auth" } )
 
                 _ ->
                     ( model, Cmd.none )
@@ -235,8 +289,7 @@ update msg model =
             ( model, Cmd.none )
 
         LoginResult (Ok auth) ->
-            {- TODO write auth to DB, do same stuff as above -}
-            ( model, Cmd.none )
+            ( { model | auth = Just auth }, Cmd.none )
 
         OnClientMessage result ->
             case result of
@@ -297,8 +350,12 @@ subscriptions _ =
 
 
 decodeLoginResult : JD.Value -> Result JD.Error Auth
-decodeLoginResult _ =
-    Ok LoggedOut
+decodeLoginResult =
+    JD.decodeValue
+        (JD.map2 (\name token -> LoggedIn { name = name, token = token })
+            (JD.field "name" JD.string)
+            (JD.field "token" JD.string)
+        )
 
 
 sendMessage : ClientMessage -> Cmd msg

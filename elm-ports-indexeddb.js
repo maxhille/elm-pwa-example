@@ -42,5 +42,16 @@ var ElmPortsIndexedDB = {
                 app.ports.queryResultInternal.send({});
             };
         });
+
+        app.ports.putInternal.subscribe(opts => {
+            // https://developer.mozilla.org/en-US/docs/Web/API/IDBObjectStore/put
+            var db = ElmPortsIndexedDB.dbs[opts.db];
+            var tx = db.transaction([opts.name], "readwrite");
+            var store = tx.objectStore(opts.name);
+            var req = store.put(opts.data, opts.key);
+            req.onsuccess = ev => {
+//                app.ports.putResultInternal.send({});
+            };
+        });
     }
 };

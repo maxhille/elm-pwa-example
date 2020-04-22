@@ -7,6 +7,7 @@ port module IndexedDB exposing
     , createObjectStoreResult
     , openRequest
     , openResponse
+    , put
     , query
     , queryResult
     )
@@ -33,6 +34,20 @@ type alias ObjectStore =
     { db : DB
     , name : String
     }
+
+
+port putInternal : JE.Value -> Cmd msg
+
+
+put : ObjectStore -> String -> JE.Value -> Cmd msg
+put os key data =
+    JE.object
+        [ ( "db", JE.string os.db )
+        , ( "name", JE.string os.name )
+        , ( "data", data )
+        , ( "key", JE.string key )
+        ]
+        |> putInternal
 
 
 port queryInternal : JE.Value -> Cmd msg
