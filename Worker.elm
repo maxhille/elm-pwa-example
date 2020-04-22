@@ -27,6 +27,7 @@ port login : JE.Value -> Cmd msg
 port onLoginResult : (JD.Value -> msg) -> Sub msg
 
 
+main : Program () Model Msg
 main =
     Platform.worker
         { init = init
