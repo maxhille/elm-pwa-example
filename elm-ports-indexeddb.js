@@ -37,9 +37,9 @@ var ElmPortsIndexedDB = {
             var db = ElmPortsIndexedDB.dbs[opts.db];
             var tx = db.transaction([opts.name], "readwrite");
             var store = tx.objectStore(opts.name);
-            var req = store.get("Auth");
+            var req = store.get("key");
             req.onsuccess = ev => {
-                app.ports.queryResultInternal.send({});
+                app.ports.queryResultInternal.send(req.result);
             };
         });
 

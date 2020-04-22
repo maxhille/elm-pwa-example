@@ -194,7 +194,7 @@ init _ =
     ( { subscription = SW.NoSubscription
       , vapidKey = Nothing
       , permissionStatus = Nothing
-      , auth = Just LoggedOut
+      , auth = Nothing
       , db = Nothing
       , authSaved = False
       }
@@ -220,33 +220,23 @@ extendedUpdate msg model =
     , Cmd.batch
         [ newCmd
         , updateClients newModel
-        , saveAuth newModel
         ]
     )
 
 
-saveAuth : Model -> Cmd Msg
-saveAuth model =
-    if model.authSaved then
-        Cmd.none
-
-    else
-        case model.auth of
-            Nothing ->
-                Cmd.none
-
-            Just auth ->
-                case model.db of
-                    Nothing ->
-                        Cmd.none
-
-                    Just db ->
-                        putAuth db auth
+getAuth : DB.DB -> Cmd Msg
+getAuth db =
+    DB.query { db = db, name = "auth" }
 
 
-putAuth : DB.DB -> Auth -> Cmd Msg
-putAuth db auth =
-    DB.put { db = db, name = "auth" } "key" (encodeAuth (Just auth))
+maybePutAuth : Maybe DB.DB -> Auth -> Cmd Msg
+maybePutAuth mdb auth =
+    case mdb of
+        Nothing ->
+            Cmd.none
+
+        Just db ->
+            DB.put { db = db, name = "auth" } "key" (encodeAuth (Just auth))
 
 
 logUpdate :
@@ -274,7 +264,7 @@ update msg model =
                     ( model, DB.createObjectStore db "auth" )
 
                 DB.Success ->
-                    ( { model | db = Just db }, DB.query { db = db, name = "auth" } )
+                    ( { model | db = Just db }, getAuth db )
 
                 _ ->
                     ( model, Cmd.none )
@@ -283,13 +273,25 @@ update msg model =
             ( model, openDb )
 
         QueryResult json ->
-            ( model, Cmd.none )
+            let
+                result =
+                    JD.decodeValue decodeAuth json
+
+                _ =
+                    Debug.log "QueryResult JSON " result
+            in
+            case result of
+                Err err ->
+                    ( { model | auth = Just LoggedOut }, Cmd.none )
+
+                Ok auth ->
+                    ( { model | auth = Just auth }, Cmd.none )
 
         LoginResult (Err _) ->
             ( model, Cmd.none )
 
         LoginResult (Ok auth) ->
-            ( { model | auth = Just auth }, Cmd.none )
+            ( { model | auth = Just auth }, maybePutAuth model.db auth )
 
         OnClientMessage result ->
             case result of
