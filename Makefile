@@ -22,6 +22,7 @@ build/srv: $(go_src)
 serve:
 	while true; do \
 		kill `cat .pid`; \
+		clear ;\
 		make all; \
 		build/srv & echo $$! > .pid ;\
 		inotifywait -qre close_write $(elm_src) $(go_src); \
