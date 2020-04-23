@@ -7,15 +7,19 @@ import (
 
 	"github.com/asdine/storm/v3"
 	"github.com/google/uuid"
+	"github.com/maxhille/boltd"
 	"github.com/maxhille/elm-pwa-example/app"
 )
 
 func main() {
+	db, _ := newLocalDB()
+	defer db.close()
+	// https://github.com/boltdb/boltd
+	http.Handle("/debug/", http.StripPrefix("/debug", boltd.NewHandler(db.db.Bolt)))
+
 	// for local dev
 	http.Handle("/", LoggingHandler{http.FileServer(newPublicFileSystem())})
 
-	db, _ := newLocalDB()
-	defer db.close()
 	app := app.New(
 		db,
 		&LocalTasks{},
