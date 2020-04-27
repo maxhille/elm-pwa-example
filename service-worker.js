@@ -47,6 +47,24 @@ app.ports.subscribeInternal.subscribe(key => {
         });
 });
 
+app.ports.saveSubscription.subscribe(opts => {
+    fetch("/api/subscription", {
+        method: 'POST',
+        headers: new Headers({
+            'Authorization': opts.auth,
+            'Content-Type': 'application/json'
+        }),
+        body: JSON.stringify({
+            endpoint: opts.payload.endpoint,
+            auth: btoa(opts.payload.auth),
+            p265dh: btoa(opts.payload.p265dh)
+        })
+    })
+        .then(response => {
+            //return response.json();
+        })
+});
+
 self.navigator.permissions.query({ name: "notifications" }).then(ps => {
     app.ports.onPermissionChangeInternal.send(ps.state);
     ps.onchange = ev => {

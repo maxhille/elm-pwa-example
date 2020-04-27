@@ -52,12 +52,26 @@ func New(db DB, tasks Tasks, auth Auth, handler HttpHandler) App {
 
 func (app *App) Run(port string) error {
 	app.http.HandleFunc("/vapid-public-key", app.getPublicKey)
-	app.http.HandleFunc("/api/subscription", app.putSubscription)
+	app.HandleFuncAuthed("/api/subscription", app.putSubscription)
 	app.http.HandleFunc("/api/post", app.putPost)
 	app.http.HandleFunc("/api/posts", app.getPosts)
 	app.http.HandleFunc("/api/auth", app.postAuth)
 
 	return app.http.ListenAndServe(":"+port, nil)
+}
+
+func (app *App) HandleFuncAuthed(path string, handle func(http.ResponseWriter,
+	*http.Request)) {
+
+	app.http.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
+		auth := req.Header["Authorization"]
+		if auth[0] != "dummy-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("no/wrong authorization header provided"))
+			return
+		}
+		handle(w, req)
+	})
 }
 
 func (app *App) getPublicKey(w http.ResponseWriter, req *http.Request) {
@@ -104,7 +118,7 @@ func (app *App) putSubscription(w http.ResponseWriter, req *http.Request) {
 	s := Subscription{}
 	err = decoder.Decode(&s)
 	if err != nil {
-		msg := fmt.Sprintf("could not read json body key (%v)", err)
+		msg := fmt.Sprintf("could not unmarshal json body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(msg))
 		return

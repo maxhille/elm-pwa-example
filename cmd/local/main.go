@@ -121,6 +121,7 @@ func newLocalDB() (*LocalDB, error) {
 
 	db.AutoMigrate(&app.KeyPair{})
 	db.AutoMigrate(&Account{})
+	db.AutoMigrate(&app.Subscription{})
 
 	return &LocalDB{db}, nil
 }

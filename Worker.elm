@@ -115,14 +115,17 @@ encodeSubscription maybe =
                 Subscribed data ->
                     JE.object
                         [ ( "type", JE.string "subscribed" )
-                        , ( "data"
-                          , JE.object
-                                [ ( "auth", JE.string data.auth )
-                                , ( "p256dh", JE.string data.p256dh )
-                                , ( "endpoint", JE.string data.endpoint )
-                                ]
-                          )
+                        , ( "data", encodeSubscriptionData data )
                         ]
+
+
+encodeSubscriptionData : SubscriptionData -> JE.Value
+encodeSubscriptionData data =
+    JE.object
+        [ ( "auth", JE.string data.auth )
+        , ( "p256dh", JE.string data.p256dh )
+        , ( "endpoint", JE.string data.endpoint )
+        ]
 
 
 encodeAuth : Maybe Auth -> JE.Value
@@ -391,8 +394,32 @@ update msg model =
 
                 Ok subscription ->
                     ( { model | subscription = Just subscription }
-                    , encodeSubscription (Just subscription) |> saveSubscription
+                    , maybeSaveSubscription model.auth subscription
                     )
+
+
+maybeSaveSubscription : Maybe Auth -> Subscription -> Cmd msg
+maybeSaveSubscription maybeAuth subscription =
+    case maybeAuth of
+        Nothing ->
+            Cmd.none
+
+        Just auth ->
+            case auth of
+                LoggedOut ->
+                    Cmd.none
+
+                LoggedIn loggedIn ->
+                    case subscription of
+                        NoSubscription ->
+                            Cmd.none
+
+                        Subscribed data ->
+                            JE.object
+                                [ ( "auth", JE.string loggedIn.token )
+                                , ( "payload", encodeSubscriptionData data )
+                                ]
+                                |> saveSubscription
 
 
 updateClients : Model -> Cmd Msg
