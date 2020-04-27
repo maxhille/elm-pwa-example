@@ -2,5 +2,5 @@ elm-stuff
 build/
 
 *.swp
-.storm.db
+.local.db
 .pid

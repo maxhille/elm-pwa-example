@@ -5,17 +5,23 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/asdine/storm/v3"
 	"github.com/google/uuid"
-	"github.com/maxhille/boltd"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/maxhille/elm-pwa-example/app"
 )
 
+type Account struct {
+	Name  string
+	Token string
+}
+
 func main() {
-	db, _ := newLocalDB()
+	db, err := newLocalDB()
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer db.close()
-	// https://github.com/boltdb/boltd
-	http.Handle("/debug/", http.StripPrefix("/debug", boltd.NewHandler(db.db.Bolt)))
 
 	// for local dev
 	http.Handle("/", LoggingHandler{http.FileServer(newPublicFileSystem())})
@@ -104,14 +110,18 @@ func (lh *LocalHandler) ListenAndServe(port string,
 }
 
 type LocalDB struct {
-	db *storm.DB
+	db *gorm.DB
 }
 
 func newLocalDB() (*LocalDB, error) {
-	db, err := storm.Open(".storm.db")
+	db, err := gorm.Open("sqlite3", ".local.db")
 	if err != nil {
 		return nil, err
 	}
+
+	db.AutoMigrate(&app.KeyPair{})
+	db.AutoMigrate(&Account{})
+
 	return &LocalDB{db}, nil
 }
 
@@ -121,8 +131,9 @@ func (db *LocalDB) close() {
 
 func (db *LocalDB) GetKey(ctx context.Context) (app.KeyPair, error) {
 	kp := app.KeyPair{}
-	err := db.db.Get("keypair", 0, &kp)
+	err := db.db.Take(&kp).Error
 	if err != nil {
+		log.Printf("getkey err: %v", err)
 		return kp, app.ErrNoSuchEntity
 	}
 	return kp, nil
@@ -130,7 +141,8 @@ func (db *LocalDB) GetKey(ctx context.Context) (app.KeyPair, error) {
 
 func (db *LocalDB) PutKey(ctx context.Context, kp app.KeyPair) error {
 	log.Printf("saving new keypair: %v", kp)
-	return db.db.Set("keypair", 0, &kp)
+	db.db.Create(&kp)
+	return nil
 }
 
 func (db *LocalDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
@@ -176,7 +188,8 @@ func (db *LocalDB) PutPost(ctx context.Context, p app.Post) error {
 }
 
 func (db *LocalDB) saveLogin(name string, token string) error {
-	return db.db.Set("logins", token, name)
+	db.db.Create(Account{Name: name, Token: token})
+	return nil
 }
 
 type LocalTasks struct {
