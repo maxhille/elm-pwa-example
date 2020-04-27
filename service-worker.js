@@ -39,8 +39,8 @@ app.ports.subscribeInternal.subscribe(key => {
     };
     registration.pushManager
         .subscribe(options)
-        .then(x => {
-            console.log(x);
+        .then(subscription => {
+            app.ports.onNewSubscriptionInternal.send(subscription.toJSON());
         })
         .catch(x => {
             console.log(x);

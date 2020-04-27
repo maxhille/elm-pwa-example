@@ -2,6 +2,7 @@ port module Worker exposing
     ( Auth(..)
     , ClientMessage(..)
     , ClientState
+    , Subscription(..)
     , logout
     , main
     , onClientUpdate
@@ -25,6 +26,9 @@ port onVapidkeyResult : (String -> msg) -> Sub msg
 port login : JE.Value -> Cmd msg
 
 
+port saveSubscription : JE.Value -> Cmd msg
+
+
 port onLoginResult : (JD.Value -> msg) -> Sub msg
 
 
@@ -38,7 +42,7 @@ main =
 
 
 type alias Model =
-    { subscription : SW.Subscription
+    { subscription : Maybe Subscription
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     , auth : Maybe Auth
@@ -55,6 +59,7 @@ type Msg
     | StoreCreated (Result JD.Error DB.ObjectStore)
     | QueryResult DB.QueryResult
     | LoginResult (Result JD.Error Auth)
+    | NewSubscription (Result JD.Error Subscription)
 
 
 type Auth
@@ -73,7 +78,7 @@ type ClientMessage
 
 
 type alias ClientState =
-    { subscription : SW.Subscription
+    { subscription : Maybe Subscription
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     , auth : Maybe Auth
@@ -96,23 +101,28 @@ encodeMaybeString ms =
             JE.string s
 
 
-encodeSubscription : SW.Subscription -> JE.Value
-encodeSubscription subscription =
-    case subscription of
-        SW.NoSubscription ->
-            JE.object [ ( "type", JE.string "none" ) ]
+encodeSubscription : Maybe Subscription -> JE.Value
+encodeSubscription maybe =
+    case maybe of
+        Nothing ->
+            JE.null
 
-        SW.Subscribed data ->
-            JE.object
-                [ ( "type", JE.string "subscribed" )
-                , ( "data"
-                  , JE.object
-                        [ ( "auth", JE.string data.auth )
-                        , ( "p256dh", JE.string data.p256dh )
-                        , ( "endpoint", JE.string data.endpoint )
+        Just subscription ->
+            case subscription of
+                NoSubscription ->
+                    JE.object [ ( "type", JE.string "none" ) ]
+
+                Subscribed data ->
+                    JE.object
+                        [ ( "type", JE.string "subscribed" )
+                        , ( "data"
+                          , JE.object
+                                [ ( "auth", JE.string data.auth )
+                                , ( "p256dh", JE.string data.p256dh )
+                                , ( "endpoint", JE.string data.endpoint )
+                                ]
+                          )
                         ]
-                  )
-                ]
 
 
 encodeAuth : Maybe Auth -> JE.Value
@@ -155,12 +165,52 @@ decodeAuth =
             )
 
 
-subscriptionDataDecoder : JD.Decoder SW.SubscriptionData
-subscriptionDataDecoder =
-    JD.map3 SW.SubscriptionData
-        (JD.at [ "auth" ] JD.string)
-        (JD.at [ "p256dh" ] JD.string)
-        (JD.at [ "endpoint" ] JD.string)
+type Subscription
+    = NoSubscription
+    | Subscribed SubscriptionData
+
+
+type alias SubscriptionData =
+    { auth : String
+    , p256dh : String
+    , endpoint : String
+    }
+
+
+decodeSubscription : JD.Decoder Subscription
+decodeSubscription =
+    JD.field "type" JD.string
+        |> JD.andThen
+            (\typ ->
+                case typ of
+                    "none" ->
+                        JD.succeed NoSubscription
+
+                    "subscribed" ->
+                        JD.field "data"
+                            (JD.map
+                                Subscribed
+                                (JD.map3
+                                    SubscriptionData
+                                    (JD.field "auth" JD.string)
+                                    (JD.field "p256dh" JD.string)
+                                    (JD.field "endpoint" JD.string)
+                                )
+                            )
+
+                    _ ->
+                        JD.fail <| "unknown type: " ++ typ
+            )
+
+
+decodeNewSubscription : JD.Decoder Subscription
+decodeNewSubscription =
+    JD.map Subscribed
+        (JD.map3 SubscriptionData
+            (JD.at [ "keys", "auth" ] JD.string)
+            (JD.at [ "keys", "p256dh" ] JD.string)
+            (JD.at [ "endpoint" ] JD.string)
+        )
 
 
 decodePermissionStatus : JD.Decoder P.PermissionStatus
@@ -172,10 +222,18 @@ decodePermissionStatus =
 decodeClientState : JD.Decoder ClientState
 decodeClientState =
     JD.map4 ClientState
-        (JD.at [ "subscription" ] SW.decodeSubscription)
-        (JD.at [ "vapidKey" ] (JD.nullable JD.string))
-        (JD.at [ "permissionStatus" ] (JD.nullable decodePermissionStatus))
-        (JD.at [ "auth" ] (JD.nullable decodeAuth))
+        (JD.field "subscription" (JD.nullable decodeSubscription))
+        (JD.field "vapidKey" (JD.nullable JD.string))
+        (JD.field "permissionStatus" (JD.nullable decodePermissionStatus))
+        (JD.field "auth" (JD.nullable decodeAuth))
+
+
+port onNewSubscriptionInternal : (JD.Value -> msg) -> Sub msg
+
+
+onNewSubscription : (Result JD.Error Subscription -> msg) -> Sub msg
+onNewSubscription msg =
+    onNewSubscriptionInternal (JD.decodeValue decodeNewSubscription >> msg)
 
 
 encodeClientstate : ClientState -> JE.Value
@@ -193,7 +251,7 @@ encodeClientstate v =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { subscription = SW.NoSubscription
+    ( { subscription = Nothing
       , vapidKey = Nothing
       , permissionStatus = Nothing
       , auth = Nothing
@@ -326,6 +384,16 @@ update msg model =
         PermissionChange ps ->
             ( { model | permissionStatus = Just ps }, Cmd.none )
 
+        NewSubscription result ->
+            case result of
+                Err _ ->
+                    ( model, Cmd.none )
+
+                Ok subscription ->
+                    ( { model | subscription = Just subscription }
+                    , encodeSubscription (Just subscription) |> saveSubscription
+                    )
+
 
 updateClients : Model -> Cmd Msg
 updateClients model =
@@ -353,6 +421,7 @@ subscriptions _ =
         , DB.openResponse OnDBOpen
         , DB.createObjectStoreResult StoreCreated
         , DB.queryResult QueryResult
+        , onNewSubscription NewSubscription
         ]
 
 

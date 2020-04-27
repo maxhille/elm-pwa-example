@@ -2,14 +2,10 @@ port module ServiceWorker exposing
     ( Availability(..)
     , Error
     , Registration(..)
-    , Subscription(..)
-    , SubscriptionData
     , checkAvailability
-    , decodeSubscription
     , getAvailability
     , getRegistration
     , onMessage
-    , onSubscriptionState
     , postMessage
     , register
     , sendBroadcast
@@ -32,34 +28,8 @@ type Registration
     | RegistrationError
 
 
-type Subscription
-    = NoSubscription
-    | Subscribed SubscriptionData
-
-
-type alias SubscriptionData =
-    { auth : String
-    , p256dh : String
-    , endpoint : String
-    }
-
-
 type alias Error =
     String
-
-
-decodeSubscription : JD.Decoder Subscription
-decodeSubscription =
-    JD.field "type" JD.string
-        |> JD.andThen
-            (\typ ->
-                case typ of
-                    "none" ->
-                        JD.succeed NoSubscription
-
-                    _ ->
-                        JD.fail <| "unknown type: " ++ typ
-            )
 
 
 register : Cmd msg
@@ -112,24 +82,7 @@ port registrationResponse : (String -> msg) -> Sub msg
 port subscribeInternal : String -> Cmd msg
 
 
-port onSubscriptionStateInternal : (JD.Value -> msg) -> Sub msg
-
-
 port sendBroadcast : Bool -> Cmd msg
-
-
-onSubscriptionState : (Result Error Subscription -> msg) -> Sub msg
-onSubscriptionState msg =
-    onSubscriptionStateInternal
-        (JD.decodeValue decodeSubscription
-            >> mapError
-            >> msg
-        )
-
-
-mapError : Result JD.Error a -> Result Error a
-mapError =
-    Result.mapError JD.errorToString
 
 
 checkAvailability : Cmd msg

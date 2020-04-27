@@ -24,7 +24,7 @@ type alias Model =
     , posts : List Post
     , swavailability : SW.Availability
     , swRegistration : SW.Registration
-    , swSubsciption : SW.Subscription
+    , swSubscription : Maybe W.Subscription
     , swVapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     , loggedIn : Maybe Bool
@@ -160,12 +160,17 @@ viewPwaInfo model =
         , Html.tr []
             [ Html.td [] [ text "Service Worker Subscription" ]
             , Html.td []
-                [ case model.swSubsciption of
-                    SW.NoSubscription ->
-                        text "No subscription"
+                [ case model.swSubscription of
+                    Nothing ->
+                        text "unknown"
 
-                    SW.Subscribed data ->
-                        text ("Subscription:" ++ data.endpoint)
+                    Just subscription ->
+                        case subscription of
+                            W.NoSubscription ->
+                                text "No subscription"
+
+                            W.Subscribed data ->
+                                text ("Subscription:" ++ data.endpoint)
                 ]
             ]
         , Html.tr []
@@ -235,7 +240,7 @@ init _ =
       , posts = []
       , swavailability = SW.Unknown
       , swRegistration = SW.RegistrationUnknown
-      , swSubsciption = SW.NoSubscription
+      , swSubscription = Nothing
       , swVapidKey = Nothing
       , permissionStatus = Nothing
       , loginForm = { name = "" }
@@ -315,12 +320,16 @@ update msg model =
 
         SWClientUpdate result ->
             case result of
-                Err _ ->
+                Err err ->
+                    let
+                        _ =
+                            Debug.log "ClientUpdate" err
+                    in
                     ( model, Cmd.none )
 
                 Ok cu ->
                     ( { model
-                        | swSubsciption = cu.subscription
+                        | swSubscription = cu.subscription
                         , swVapidKey = cu.vapidKey
                         , permissionStatus = cu.permissionStatus
                         , loggedIn =
