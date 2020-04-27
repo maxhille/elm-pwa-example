@@ -2,6 +2,7 @@ port module Worker exposing
     ( Auth(..)
     , ClientMessage(..)
     , ClientState
+    , logout
     , main
     , onClientUpdate
     , sendMessage
@@ -68,6 +69,7 @@ type ClientMessage
     = Subscribe String
     | Hello
     | Login String
+    | Logout
 
 
 type alias ClientState =
@@ -315,6 +317,9 @@ update msg model =
                                 )
                             )
 
+                        Logout ->
+                            ( { model | auth = Just LoggedOut }, Cmd.none )
+
         VapidkeyResult s ->
             ( { model | vapidKey = Just s }, Cmd.none )
 
@@ -365,6 +370,11 @@ sendMessage cm =
     cm |> encodeClientMessage |> SW.postMessage
 
 
+logout : Cmd msg
+logout =
+    sendMessage Logout
+
+
 onClientMessage : (Result JD.Error ClientMessage -> Msg) -> Sub Msg
 onClientMessage msg =
     SW.onMessage (JD.decodeValue decodeClientMessage >> msg)
@@ -383,6 +393,11 @@ encodeClientMessage cm =
             JE.object
                 [ ( "type", JE.string "login" )
                 , ( "name", JE.string name )
+                ]
+
+        Logout ->
+            JE.object
+                [ ( "type", JE.string "logout" )
                 ]
 
         Hello ->
@@ -407,6 +422,9 @@ decodeClientMessage =
 
                     "hello" ->
                         JD.succeed Hello
+
+                    "logout" ->
+                        JD.succeed Logout
 
                     _ ->
                         JD.fail <| "unknown message: " ++ typ

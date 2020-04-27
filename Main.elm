@@ -54,6 +54,7 @@ type Msg
     | RequestPermission
     | ChangedName String
     | Login
+    | Logout
 
 
 main : Program () Model Msg
@@ -108,7 +109,8 @@ viewLogin form =
 viewChat : Model -> Html Msg
 viewChat model =
     Html.div []
-        [ Html.ul []
+        [ Html.button [ HE.onClick Logout ] [ text "Logout" ]
+        , Html.ul []
             (List.map viewPost model.posts)
         , Html.form [ HE.onSubmit SendAndClear ]
             [ Html.input
@@ -282,6 +284,9 @@ update msg model =
 
         Login ->
             ( model, login model.loginForm )
+
+        Logout ->
+            ( model, W.logout )
 
         SWAvailability availability ->
             ( { model | swavailability = availability }
