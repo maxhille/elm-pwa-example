@@ -168,8 +168,8 @@ viewPwaInfo model =
                             W.NoSubscription ->
                                 text "No subscription"
 
-                            W.Subscribed data ->
-                                text ("Subscription:" ++ data.endpoint)
+                            W.Subscribed _ ->
+                                text "Has subscription"
                 ]
             ]
         , Html.tr []

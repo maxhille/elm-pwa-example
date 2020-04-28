@@ -29,6 +29,9 @@ port login : JE.Value -> Cmd msg
 port saveSubscription : JE.Value -> Cmd msg
 
 
+port getSubscription : JE.Value -> Cmd msg
+
+
 port onLoginResult : (JD.Value -> msg) -> Sub msg
 
 
@@ -302,6 +305,16 @@ maybePutAuth mdb auth =
             DB.put { db = db, name = "auth" } "key" (encodeAuth (Just auth))
 
 
+checkSubscription : Auth -> Cmd msg
+checkSubscription auth =
+    case auth of
+        LoggedOut ->
+            Cmd.none
+
+        LoggedIn loggedIn ->
+            authenticatedOpts loggedIn Nothing |> getSubscription
+
+
 logUpdate :
     (Msg -> Model -> ( Model, Cmd Msg ))
     -> Msg
@@ -354,7 +367,12 @@ update msg model =
             ( model, Cmd.none )
 
         LoginResult (Ok auth) ->
-            ( { model | auth = Just auth }, maybePutAuth model.db auth )
+            ( { model | auth = Just auth }
+            , Cmd.batch
+                [ maybePutAuth model.db auth
+                , checkSubscription auth
+                ]
+            )
 
         OnClientMessage result ->
             case result of
@@ -415,11 +433,22 @@ maybeSaveSubscription maybeAuth subscription =
                             Cmd.none
 
                         Subscribed data ->
-                            JE.object
-                                [ ( "auth", JE.string loggedIn.token )
-                                , ( "payload", encodeSubscriptionData data )
-                                ]
+                            authenticatedOpts loggedIn
+                                (Just (encodeSubscriptionData data))
                                 |> saveSubscription
+
+
+authenticatedOpts : { token : String, name : String } -> Maybe JE.Value -> JE.Value
+authenticatedOpts auth maybePayload =
+    ( "auth", JE.string auth.token )
+        :: (case maybePayload of
+                Nothing ->
+                    []
+
+                Just payload ->
+                    [ ( "payload", payload ) ]
+           )
+        |> JE.object
 
 
 updateClients : Model -> Cmd Msg

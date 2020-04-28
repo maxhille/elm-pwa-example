@@ -21,7 +21,7 @@ app.ports.getVapidKey.subscribe(() => {
 });
 app.ports.login.subscribe(opts => {
     fetch("/api/login", {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify(opts)
     })
         .then(response => {
@@ -49,20 +49,34 @@ app.ports.subscribeInternal.subscribe(key => {
 
 app.ports.saveSubscription.subscribe(opts => {
     fetch("/api/subscription", {
-        method: 'POST',
+        method: "POST",
         headers: new Headers({
-            'Authorization': opts.auth,
-            'Content-Type': 'application/json'
+            Authorization: opts.auth,
+            "Content-Type": "application/json"
         }),
         body: JSON.stringify({
             endpoint: opts.payload.endpoint,
             auth: btoa(opts.payload.auth),
-            p265dh: btoa(opts.payload.p265dh)
+            p256dh: btoa(opts.payload.p256dh)
+        })
+    }).then(response => {
+        // TODO do something with the reply
+        //return response.json();
+    });
+});
+
+app.ports.getSubscription.subscribe(opts => {
+    fetch("/api/subscription", {
+        headers: new Headers({
+            Authorization: opts.auth
         })
     })
         .then(response => {
-            //return response.json();
+            return response.json();
         })
+        .then(json => {
+            app.ports.getSubscriptionReply.send(json);
+        });
 });
 
 self.navigator.permissions.query({ name: "notifications" }).then(ps => {
@@ -81,7 +95,6 @@ var urlsToCache = [
     "/elm-worker.js",
     "/vapid-public-key"
 ];
-
 
 self.addEventListener("install", function(event) {
     // Perform install steps

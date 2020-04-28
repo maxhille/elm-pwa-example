@@ -149,7 +149,9 @@ func (db *localDB) PutKey(ctx context.Context, kp app.KeyPair) error {
 
 func (db *localDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
 	error) {
-	return app.User{}, errors.New("not implemented")
+	u := app.User{}
+	err := db.gorm.Where("id = ?", id).First(&u).Error
+	return u, err
 }
 
 func (db *localDB) GetUsers(ctx context.Context) ([]app.User,
@@ -161,12 +163,21 @@ func (db *localDB) PutUser(ctx context.Context, u app.User) error {
 	return errors.New("not implemented")
 }
 
-func (db *localDB) PutSubscription(ctx context.Context, s app.Subscription,
-	u app.User) error {
-	return errors.New("not implemented")
+func (db *localDB) CreateSubscription(ctx context.Context,
+	s app.Subscription) error {
+	return db.gorm.Save(&s).Error
 }
 
-func (db *localDB) GetSubscriptions(ctx context.Context) ([]app.Subscription,
+func (db *localDB) ReadSubscription(ctx context.Context, uid uuid.UUID) (
+	s app.Subscription, err error) {
+	err = db.gorm.Where("user_id = ?", uid).First(&s).Error
+	if gorm.IsRecordNotFoundError(err) {
+		err = app.ErrNoSuchEntity
+	}
+	return
+}
+
+func (db *localDB) ReadAllSubscriptions(ctx context.Context) ([]app.Subscription,
 	error) {
 	return []app.Subscription{}, errors.New("not implemented")
 }
@@ -216,6 +227,9 @@ func (us *localUserService) Current(ctx context.Context) uuid.UUID {
 
 func (us *localUserService) Decorate(req *http.Request) (context.Context, error) {
 	auth := req.Header["Authorization"]
+	if len(auth) == 0 {
+		return req.Context(), errors.New("authorization header missing")
+	}
 	id, err := uuid.Parse(auth[0])
 	if err != nil {
 		return req.Context(), err

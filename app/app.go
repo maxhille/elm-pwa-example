@@ -17,9 +17,10 @@ import (
 var curve = elliptic.P256()
 
 type Subscription struct {
-	Endpoint string `json:"endpoint"`
-	P256dh   []byte `json:"p256dh"`
-	Auth     []byte `json:"auth"`
+	UserID   uuid.UUID `json:-`
+	Endpoint string    `json:"endpoint"`
+	P256dh   []byte    `json:"p256dh"`
+	Auth     []byte    `json:"auth"`
 }
 
 type Post struct {
@@ -47,12 +48,38 @@ func New(db DB, tasks Tasks, user UserService, handler HttpHandler) App {
 
 func (app *App) Run(port string) error {
 	app.http.HandleFunc("/vapid-public-key", app.getPublicKey)
-	app.HandleFuncAuthed("/api/subscription", app.putSubscription)
+	app.HandleFuncAuthed("/api/subscription", methodHandler{
+		post: app.postSubscription,
+		get:  app.getSubscription,
+	}.handle)
 	app.http.HandleFunc("/api/post", app.putPost)
 	app.http.HandleFunc("/api/posts", app.getPosts)
 	app.http.HandleFunc("/api/login", app.login)
 
 	return app.http.ListenAndServe(":"+port, nil)
+}
+
+type methodHandler struct {
+	get  func(http.ResponseWriter, *http.Request)
+	post func(http.ResponseWriter, *http.Request)
+}
+
+func (mh methodHandler) handle(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case "GET":
+		if mh.get != nil {
+			mh.get(w, req)
+			return
+		}
+	case "POST":
+		if mh.post != nil {
+			mh.post(w, req)
+			return
+		}
+	default:
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
 func (app *App) HandleFuncAuthed(path string, handle func(http.ResponseWriter,
@@ -99,20 +126,12 @@ func (app *App) getPublicKey(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(k.PK))
 }
 
-func (app *App) putSubscription(w http.ResponseWriter, req *http.Request) {
+func (app *App) postSubscription(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	u, err := app.getUser(ctx)
-	if err != nil {
-		msg := fmt.Sprintf("could not get user (%v)", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(msg))
-		return
-	}
-
-	decoder := json.NewDecoder(req.Body)
 	s := Subscription{}
-	err = decoder.Decode(&s)
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&s)
 	if err != nil {
 		msg := fmt.Sprintf("could not unmarshal json body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -120,9 +139,32 @@ func (app *App) putSubscription(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = app.db.PutSubscription(ctx, s, u)
+	uid := app.user.Current(ctx)
+	s.UserID = uid
+
+	err = app.db.CreateSubscription(ctx, s)
 	if err != nil {
-		msg := fmt.Sprintf("could not save subscription (%v)", err)
+		msg := fmt.Sprintf("could not create subscription (%v)", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(msg))
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+func (app *App) getSubscription(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	uid := app.user.Current(ctx)
+	_, err := app.db.ReadSubscription(ctx, uid)
+	switch err {
+	case ErrNoSuchEntity:
+		msg := fmt.Sprintf("no subscription found (%v)", err)
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(msg))
+		return
+	default:
+		msg := fmt.Sprintf("could not read subscription (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(msg))
 		return
@@ -292,7 +334,7 @@ func (app *App) notifyAll(ctx context.Context, _ string) error {
 		return fmt.Errorf("could not get server key: %v", err)
 	}
 	// get user keys
-	ss, err := app.db.GetSubscriptions(ctx)
+	ss, err := app.db.ReadAllSubscriptions(ctx)
 	if err != nil {
 		return err
 	}
