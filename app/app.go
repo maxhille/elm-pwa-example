@@ -37,17 +37,12 @@ type KeyPair struct {
 type App struct {
 	db    DB
 	tasks Tasks
-	auth  Auth
+	user  UserService
 	http  HttpHandler
 }
 
-type User struct {
-	UUID uuid.UUID
-	Name string
-}
-
-func New(db DB, tasks Tasks, auth Auth, handler HttpHandler) App {
-	return App{db, tasks, auth, handler}
+func New(db DB, tasks Tasks, user UserService, handler HttpHandler) App {
+	return App{db, tasks, user, handler}
 }
 
 func (app *App) Run(port string) error {
@@ -55,7 +50,7 @@ func (app *App) Run(port string) error {
 	app.HandleFuncAuthed("/api/subscription", app.putSubscription)
 	app.http.HandleFunc("/api/post", app.putPost)
 	app.http.HandleFunc("/api/posts", app.getPosts)
-	app.http.HandleFunc("/api/auth", app.postAuth)
+	app.http.HandleFunc("/api/login", app.login)
 
 	return app.http.ListenAndServe(":"+port, nil)
 }
@@ -64,13 +59,14 @@ func (app *App) HandleFuncAuthed(path string, handle func(http.ResponseWriter,
 	*http.Request)) {
 
 	app.http.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
-		auth := req.Header["Authorization"]
-		if auth[0] != "dummy-token" {
+		ctx, err := app.user.Decorate(req)
+		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("no/wrong authorization header provided"))
+			msg := fmt.Sprintf("no/wrong authorization header provided (%v)", err)
+			w.Write([]byte(msg))
 			return
 		}
-		handle(w, req)
+		handle(w, req.WithContext(ctx))
 	})
 }
 
@@ -133,11 +129,11 @@ func (app *App) putSubscription(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (app *App) postAuth(w http.ResponseWriter, req *http.Request) {
+func (app *App) register(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	nt := &NameToken{}
-	err := json.NewDecoder(req.Body).Decode(nt)
+	u := User{}
+	err := json.NewDecoder(req.Body).Decode(&u)
 	if err != nil {
 		msg := fmt.Sprintf("could not decode json body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -145,7 +141,7 @@ func (app *App) postAuth(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	nt, err = app.auth.Login(ctx, nt.Name)
+	u, err = app.user.Register(ctx, u.Name)
 	if err != nil {
 		msg := fmt.Sprintf("could not get posts from db: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -153,7 +149,46 @@ func (app *App) postAuth(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	json, err := json.Marshal(nt)
+	json, err := json.Marshal(u)
+	if err != nil {
+		msg := fmt.Sprintf("could not marshal posts (%v)", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(msg))
+		return
+	}
+	w.Write(json)
+}
+
+func (app *App) login(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	u := User{}
+	err := json.NewDecoder(req.Body).Decode(&u)
+	if err != nil {
+		msg := fmt.Sprintf("could not decode json body: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(msg))
+		return
+	}
+
+	u2, err := app.user.GetUserByName(ctx, u.Name)
+	if err != nil {
+		// just assume the user is missing, other errors will show up again soon
+		u2, err = app.user.Register(ctx, u.Name)
+		if err != nil {
+			msg := fmt.Sprintf("could not get user from db: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(msg))
+			return
+		}
+	}
+
+	r := struct {
+		Name  string `json:"name"`
+		Token string `json:"token"`
+	}{Name: u2.Name, Token: u2.ID.String()}
+
+	json, err := json.Marshal(r)
 	if err != nil {
 		msg := fmt.Sprintf("could not marshal posts (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -235,9 +270,9 @@ func (app *App) putPost(w http.ResponseWriter, req *http.Request) {
 }
 
 func (app *App) getUser(ctx context.Context) (User, error) {
-	ru := app.auth.Current(ctx)
+	id := app.user.Current(ctx)
 
-	u, err := app.db.GetUser(ctx, ru.UUID)
+	u, err := app.db.GetUser(ctx, id)
 	if err == ErrNoSuchEntity {
 		err2 := app.db.PutUser(ctx, u)
 		if err2 != nil {

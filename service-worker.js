@@ -20,7 +20,7 @@ app.ports.getVapidKey.subscribe(() => {
         });
 });
 app.ports.login.subscribe(opts => {
-    fetch("/api/auth", {
+    fetch("/api/login", {
         method: 'POST',
         body: JSON.stringify(opts)
     })

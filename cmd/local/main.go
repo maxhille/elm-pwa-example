@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 
@@ -17,7 +18,7 @@ type Account struct {
 }
 
 func main() {
-	db, err := newLocalDB()
+	db, err := newlocalDB()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,9 +29,9 @@ func main() {
 
 	app := app.New(
 		db,
-		&LocalTasks{},
-		&LocalAuth{db},
-		&LocalHandler{},
+		&localTasks{},
+		newLocalUserService(db),
+		&localHandler{},
 	)
 
 	if err := app.Run("8080"); err != nil {
@@ -90,10 +91,10 @@ func newPublicFileSystem() *publicFileSystem {
 	}
 }
 
-type LocalHandler struct {
+type localHandler struct {
 }
 
-func (lh *LocalHandler) HandleFunc(pattern string,
+func (lh *localHandler) HandleFunc(pattern string,
 	handler func(http.ResponseWriter, *http.Request)) {
 	logHandler := func(rw http.ResponseWriter, req *http.Request) {
 		lrw := &loggingResponseWriter{rw: rw}
@@ -103,36 +104,36 @@ func (lh *LocalHandler) HandleFunc(pattern string,
 	http.HandleFunc(pattern, logHandler)
 }
 
-func (lh *LocalHandler) ListenAndServe(port string,
+func (lh *localHandler) ListenAndServe(port string,
 	handler http.Handler) error {
 	log.Printf("app available at http://localhost%v", port)
 	return http.ListenAndServe(port, handler)
 }
 
-type LocalDB struct {
-	db *gorm.DB
+type localDB struct {
+	gorm *gorm.DB
 }
 
-func newLocalDB() (*LocalDB, error) {
+func newlocalDB() (*localDB, error) {
 	db, err := gorm.Open("sqlite3", ".local.db")
 	if err != nil {
 		return nil, err
 	}
 
 	db.AutoMigrate(&app.KeyPair{})
-	db.AutoMigrate(&Account{})
 	db.AutoMigrate(&app.Subscription{})
+	db.AutoMigrate(&app.User{})
 
-	return &LocalDB{db}, nil
+	return &localDB{db}, nil
 }
 
-func (db *LocalDB) close() {
-	db.db.Close()
+func (db *localDB) close() {
+	db.gorm.Close()
 }
 
-func (db *LocalDB) GetKey(ctx context.Context) (app.KeyPair, error) {
+func (db *localDB) GetKey(ctx context.Context) (app.KeyPair, error) {
 	kp := app.KeyPair{}
-	err := db.db.Take(&kp).Error
+	err := db.gorm.Take(&kp).Error
 	if err != nil {
 		log.Printf("getkey err: %v", err)
 		return kp, app.ErrNoSuchEntity
@@ -140,80 +141,99 @@ func (db *LocalDB) GetKey(ctx context.Context) (app.KeyPair, error) {
 	return kp, nil
 }
 
-func (db *LocalDB) PutKey(ctx context.Context, kp app.KeyPair) error {
+func (db *localDB) PutKey(ctx context.Context, kp app.KeyPair) error {
 	log.Printf("saving new keypair: %v", kp)
-	db.db.Create(&kp)
+	db.gorm.Create(&kp)
 	return nil
 }
 
-func (db *LocalDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
+func (db *localDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
 	error) {
-	// TODO implement
-	return app.User{}, nil
+	return app.User{}, errors.New("not implemented")
 }
 
-func (db *LocalDB) GetUsers(ctx context.Context) ([]app.User,
+func (db *localDB) GetUsers(ctx context.Context) ([]app.User,
 	error) {
-	// TODO implement
-	return nil, nil
+	return nil, errors.New("not implemented")
 }
-func (db *LocalDB) PutUser(ctx context.Context, u app.User) error {
-	// TODO implement
-	return nil
+
+func (db *localDB) PutUser(ctx context.Context, u app.User) error {
+	return errors.New("not implemented")
 }
-func (db *LocalDB) PutSubscription(ctx context.Context, s app.Subscription,
+
+func (db *localDB) PutSubscription(ctx context.Context, s app.Subscription,
 	u app.User) error {
-	// TODO implement
-	return nil
+	return errors.New("not implemented")
 }
 
-func (db *LocalDB) GetSubscriptions(ctx context.Context) ([]app.Subscription,
+func (db *localDB) GetSubscriptions(ctx context.Context) ([]app.Subscription,
 	error) {
-	// TODO implement
-	return []app.Subscription{}, nil
+	return []app.Subscription{}, errors.New("not implemented")
 }
 
-func (db *LocalDB) GetPublicKey(ctx context.Context) (app.KeyPair, error) {
-	// TODO implement
-	return app.KeyPair{}, nil
+func (db *localDB) GetPosts(ctx context.Context) ([]app.Post, error) {
+	return []app.Post{}, errors.New("not implemented")
 }
 
-func (db *LocalDB) GetPosts(ctx context.Context) ([]app.Post, error) {
-	// TODO implement
-	return []app.Post{}, nil
+func (db *localDB) PutPost(ctx context.Context, p app.Post) error {
+	return errors.New("not implemented")
 }
 
-func (db *LocalDB) PutPost(ctx context.Context, p app.Post) error {
-	// TODO implement
-	return nil
+func (db *localDB) GetUserByName(ctx context.Context, name string) (u app.User,
+	err error) {
+	err = db.gorm.First(&u).Error
+	return
+}
+func (db *localDB) createUser(u *app.User) error {
+	return db.gorm.Create(&u).Error
 }
 
-func (db *LocalDB) saveLogin(name string, token string) error {
-	db.db.Create(Account{Name: name, Token: token})
-	return nil
-}
-
-type LocalTasks struct {
+type localTasks struct {
 	app.Tasks
 }
 
-func (ct *LocalTasks) Notify(ctx context.Context) error {
+func (ct *localTasks) Notify(ctx context.Context) error {
 	// TODO notify
 	return nil
 }
 
-type LocalAuth struct {
-	db *LocalDB
+func newLocalUserService(db *localDB) app.UserService {
+	return &localUserService{db: db}
 }
 
-func (ga *LocalAuth) Current(ctx context.Context) app.User {
-	// TODO migrate somewhere new, was
-	//	return guser.Current(ctx)
-	return app.User{}
+type localUserService struct {
+	db *localDB
 }
 
-func (la *LocalAuth) Login(ctx context.Context, name string) (*app.NameToken,
+func (us *localUserService) GetUserByName(ctx context.Context, name string) (
+	app.User, error) {
+	return app.User{}, errors.New("not implemented")
+}
+
+func (us *localUserService) Current(ctx context.Context) uuid.UUID {
+	return ctx.Value("user").(uuid.UUID)
+}
+
+func (us *localUserService) Decorate(req *http.Request) (context.Context, error) {
+	auth := req.Header["Authorization"]
+	id, err := uuid.Parse(auth[0])
+	if err != nil {
+		return req.Context(), err
+	}
+	return context.WithValue(req.Context(), "user", id), nil
+}
+
+func (us *localUserService) Login(ctx context.Context, name string) (uuid.UUID,
 	error) {
-	err := la.db.saveLogin(name, "dummy-token")
-	return &app.NameToken{Name: name, Token: "dummy-token"}, err
+	u, err := us.db.GetUserByName(ctx, name)
+	return u.ID, err
+}
+
+func (us *localUserService) Register(ctx context.Context, name string) (
+	app.User, error) {
+	u := app.User{
+		Name: name,
+		ID:   uuid.New(),
+	}
+	return u, us.db.createUser(&u)
 }

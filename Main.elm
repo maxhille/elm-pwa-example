@@ -33,8 +33,7 @@ type alias Model =
 
 
 type alias LoginForm =
-    { name : String
-    }
+    String
 
 
 type alias Post =
@@ -95,7 +94,7 @@ viewLogin form =
         [ Html.form [ HE.onSubmit Login ]
             [ Html.fieldset []
                 [ Html.input
-                    [ HA.value form.name
+                    [ HA.value form
                     , HE.onInput ChangedName
                     , HA.placeholder "username"
                     ]
@@ -243,7 +242,7 @@ init _ =
       , swSubscription = Nothing
       , swVapidKey = Nothing
       , permissionStatus = Nothing
-      , loginForm = { name = "" }
+      , loginForm = ""
       , loggedIn = Nothing
       }
     , SW.checkAvailability
@@ -261,7 +260,7 @@ subscriptions _ =
 
 login : LoginForm -> Cmd msg
 login form =
-    W.Login form.name
+    W.Login form
         |> W.sendMessage
 
 
@@ -278,14 +277,7 @@ update msg model =
             ( { model | posts = newPosts }, Cmd.none )
 
         ChangedName name ->
-            let
-                oldForm =
-                    model.loginForm
-
-                newForm =
-                    { oldForm | name = name }
-            in
-            ( { model | loginForm = newForm }, Cmd.none )
+            ( { model | loginForm = name }, Cmd.none )
 
         Login ->
             ( model, login model.loginForm )
