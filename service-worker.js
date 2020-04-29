@@ -19,7 +19,7 @@ app.ports.getVapidKey.subscribe(() => {
             app.ports.onVapidkeyResult.send(text);
         });
 });
-app.ports.login.subscribe(opts => {
+app.ports.sendLogin.subscribe(opts => {
     fetch("/api/login", {
         method: "POST",
         body: JSON.stringify(opts)

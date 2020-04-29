@@ -1,8 +1,9 @@
 port module Worker exposing
-    ( Auth(..)
-    , ClientMessage(..)
+    ( ClientMessage(..)
     , ClientState
+    , Login(..)
     , Subscription(..)
+    , User
     , logout
     , main
     , onClientUpdate
@@ -23,7 +24,7 @@ port getVapidKey : () -> Cmd msg
 port onVapidkeyResult : (String -> msg) -> Sub msg
 
 
-port login : JE.Value -> Cmd msg
+port sendLogin : JE.Value -> Cmd msg
 
 
 port saveSubscription : JE.Value -> Cmd msg
@@ -51,7 +52,7 @@ type alias Model =
     { subscription : Maybe Bool
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
-    , auth : Maybe Auth
+    , login : Maybe Login
     , db : Maybe DB.DB
     , authSaved : Bool
     }
@@ -64,17 +65,20 @@ type Msg
     | PermissionChange P.PermissionStatus
     | StoreCreated (Result JD.Error DB.ObjectStore)
     | QueryResult DB.QueryResult
-    | LoginResult (Result JD.Error Auth)
+    | LoginResult (Result JD.Error Login)
     | NewSubscription (Result JD.Error Subscription)
     | HasSubscription Bool
 
 
-type Auth
+type Login
     = LoggedOut
-    | LoggedIn
-        { name : String
-        , token : String
-        }
+    | LoggedIn User
+
+
+type alias User =
+    { name : String
+    , token : String
+    }
 
 
 type ClientMessage
@@ -88,7 +92,7 @@ type alias ClientState =
     { subscription : Maybe Bool
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
-    , auth : Maybe Auth
+    , login : Maybe Login
     }
 
 
@@ -113,24 +117,6 @@ maybeNull encoder maybe =
             encoder a
 
 
-encodeSubscription : Maybe Subscription -> JE.Value
-encodeSubscription maybe =
-    case maybe of
-        Nothing ->
-            JE.null
-
-        Just subscription ->
-            case subscription of
-                NoSubscription ->
-                    JE.object [ ( "type", JE.string "none" ) ]
-
-                Subscribed data ->
-                    JE.object
-                        [ ( "type", JE.string "subscribed" )
-                        , ( "data", encodeSubscriptionData data )
-                        ]
-
-
 encodeSubscriptionData : SubscriptionData -> JE.Value
 encodeSubscriptionData data =
     JE.object
@@ -140,14 +126,14 @@ encodeSubscriptionData data =
         ]
 
 
-encodeAuth : Maybe Auth -> JE.Value
-encodeAuth maybe =
+encodeLogin : Maybe Login -> JE.Value
+encodeLogin maybe =
     case maybe of
         Nothing ->
             JE.null
 
-        Just auth ->
-            case auth of
+        Just login ->
+            case login of
                 LoggedIn data ->
                     JE.object
                         [ ( "type", JE.string "logged-in" )
@@ -161,8 +147,8 @@ encodeAuth maybe =
                         ]
 
 
-decodeAuth : JD.Decoder Auth
-decodeAuth =
+decodeLogin : JD.Decoder Login
+decodeLogin =
     JD.field "type" JD.string
         |> JD.andThen
             (\typ ->
@@ -192,32 +178,6 @@ type alias SubscriptionData =
     }
 
 
-decodeSubscription : JD.Decoder Subscription
-decodeSubscription =
-    JD.field "type" JD.string
-        |> JD.andThen
-            (\typ ->
-                case typ of
-                    "none" ->
-                        JD.succeed NoSubscription
-
-                    "subscribed" ->
-                        JD.field "data"
-                            (JD.map
-                                Subscribed
-                                (JD.map3
-                                    SubscriptionData
-                                    (JD.field "auth" JD.string)
-                                    (JD.field "p256dh" JD.string)
-                                    (JD.field "endpoint" JD.string)
-                                )
-                            )
-
-                    _ ->
-                        JD.fail <| "unknown type: " ++ typ
-            )
-
-
 decodeNewSubscription : JD.Decoder Subscription
 decodeNewSubscription =
     JD.map Subscribed
@@ -240,7 +200,7 @@ decodeClientState =
         (JD.field "subscription" (JD.nullable JD.bool))
         (JD.field "vapidKey" (JD.nullable JD.string))
         (JD.field "permissionStatus" (JD.nullable decodePermissionStatus))
-        (JD.field "auth" (JD.nullable decodeAuth))
+        (JD.field "login" (JD.nullable decodeLogin))
 
 
 port onNewSubscriptionInternal : (JD.Value -> msg) -> Sub msg
@@ -260,7 +220,7 @@ encodeClientstate v =
           , Maybe.map P.permissionStatusString v.permissionStatus
                 |> encodeMaybeString
           )
-        , ( "auth", encodeAuth v.auth )
+        , ( "login", encodeLogin v.login )
         ]
 
 
@@ -269,7 +229,7 @@ init _ =
     ( { subscription = Nothing
       , vapidKey = Nothing
       , permissionStatus = Nothing
-      , auth = Nothing
+      , login = Nothing
       , db = Nothing
       , authSaved = False
       }
@@ -299,24 +259,24 @@ extendedUpdate msg model =
     )
 
 
-getAuth : DB.DB -> Cmd Msg
-getAuth db =
-    DB.query { db = db, name = "auth" }
+getLogin : DB.DB -> Cmd Msg
+getLogin db =
+    DB.query { db = db, name = "login" }
 
 
-maybePutAuth : Maybe DB.DB -> Auth -> Cmd Msg
-maybePutAuth mdb auth =
+maybePutLogin : Maybe DB.DB -> Login -> Cmd Msg
+maybePutLogin mdb login =
     case mdb of
         Nothing ->
             Cmd.none
 
         Just db ->
-            DB.put { db = db, name = "auth" } "key" (encodeAuth (Just auth))
+            DB.put { db = db, name = "login" } "key" (encodeLogin (Just login))
 
 
-checkSubscription : Auth -> Cmd msg
-checkSubscription auth =
-    case auth of
+checkSubscription : Login -> Cmd msg
+checkSubscription login =
+    case login of
         LoggedOut ->
             Cmd.none
 
@@ -346,10 +306,10 @@ update msg model =
         OnDBOpen ( db, resp ) ->
             case resp of
                 DB.UpgradeNeeded ->
-                    ( model, DB.createObjectStore db "auth" )
+                    ( model, DB.createObjectStore db "login" )
 
                 DB.Success ->
-                    ( { model | db = Just db }, getAuth db )
+                    ( { model | db = Just db }, getLogin db )
 
                 _ ->
                     ( model, Cmd.none )
@@ -360,26 +320,26 @@ update msg model =
         QueryResult json ->
             let
                 result =
-                    JD.decodeValue decodeAuth json
+                    JD.decodeValue decodeLogin json
 
                 _ =
                     Debug.log "QueryResult JSON " result
             in
             case result of
                 Err err ->
-                    ( { model | auth = Just LoggedOut }, Cmd.none )
+                    ( { model | login = Just LoggedOut }, Cmd.none )
 
-                Ok auth ->
-                    ( { model | auth = Just auth }, checkSubscription auth )
+                Ok login ->
+                    ( { model | login = Just login }, checkSubscription login )
 
         LoginResult (Err _) ->
             ( model, Cmd.none )
 
-        LoginResult (Ok auth) ->
-            ( { model | auth = Just auth }
+        LoginResult (Ok login) ->
+            ( { model | login = Just login }
             , Cmd.batch
-                [ maybePutAuth model.db auth
-                , checkSubscription auth
+                [ maybePutLogin model.db login
+                , checkSubscription login
                 ]
             )
 
@@ -398,7 +358,7 @@ update msg model =
 
                         Login name ->
                             ( model
-                            , login
+                            , sendLogin
                                 (JE.object
                                     [ ( "name", JE.string name )
                                     ]
@@ -406,7 +366,7 @@ update msg model =
                             )
 
                         Logout ->
-                            ( { model | auth = Just LoggedOut }, Cmd.none )
+                            ( { model | login = Just LoggedOut }, Cmd.none )
 
         VapidkeyResult s ->
             ( { model | vapidKey = Just s }, Cmd.none )
@@ -421,21 +381,21 @@ update msg model =
 
                 Ok subscription ->
                     ( model
-                    , maybeSaveSubscription model.auth subscription
+                    , maybeSaveSubscription model.login subscription
                     )
 
         HasSubscription subscription ->
             ( { model | subscription = Just subscription }, Cmd.none )
 
 
-maybeSaveSubscription : Maybe Auth -> Subscription -> Cmd msg
-maybeSaveSubscription maybeAuth subscription =
-    case maybeAuth of
+maybeSaveSubscription : Maybe Login -> Subscription -> Cmd msg
+maybeSaveSubscription maybeLogin subscription =
+    case maybeLogin of
         Nothing ->
             Cmd.none
 
-        Just auth ->
-            case auth of
+        Just login ->
+            case login of
                 LoggedOut ->
                     Cmd.none
 
@@ -475,7 +435,7 @@ clientState model =
     { subscription = model.subscription
     , vapidKey = model.vapidKey
     , permissionStatus = model.permissionStatus
-    , auth = model.auth
+    , login = model.login
     }
 
 
@@ -494,7 +454,7 @@ subscriptions _ =
         ]
 
 
-decodeLoginResult : JD.Value -> Result JD.Error Auth
+decodeLoginResult : JD.Value -> Result JD.Error Login
 decodeLoginResult =
     JD.decodeValue
         (JD.map2 (\name token -> LoggedIn { name = name, token = token })

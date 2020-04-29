@@ -27,7 +27,7 @@ type alias Model =
     , swSubscription : Maybe Bool
     , swVapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
-    , loggedIn : Maybe Bool
+    , login : Maybe W.Login
     , loginForm : LoginForm
     }
 
@@ -72,17 +72,17 @@ view model =
     , body =
         [ Html.div []
             [ viewPwaInfo model
-            , Html.h1 [] [ text "Hello Elm PWA Example!" ]
-            , case model.loggedIn of
+            , case model.login of
                 Nothing ->
-                    text "getting log in state..."
+                    text "getting user info..."
 
-                Just b ->
-                    if b then
-                        viewChat model
+                Just login ->
+                    case login of
+                        W.LoggedIn user ->
+                            viewChat model user
 
-                    else
-                        viewLogin model.loginForm
+                        W.LoggedOut ->
+                            viewLogin model.loginForm
             ]
         ]
     }
@@ -105,10 +105,13 @@ viewLogin form =
         ]
 
 
-viewChat : Model -> Html Msg
-viewChat model =
+viewChat : Model -> W.User -> Html Msg
+viewChat model user =
     Html.div []
-        [ Html.button [ HE.onClick Logout ] [ text "Logout" ]
+        [ Html.div []
+            [ text ("logged in as " ++ user.name ++ " ")
+            , Html.button [ HE.onClick Logout ] [ text "Logout" ]
+            ]
         , Html.ul []
             (List.map viewPost model.posts)
         , Html.form [ HE.onSubmit SendAndClear ]
@@ -242,7 +245,7 @@ init _ =
       , swVapidKey = Nothing
       , permissionStatus = Nothing
       , loginForm = ""
-      , loggedIn = Nothing
+      , login = Nothing
       }
     , SW.checkAvailability
     )
@@ -257,8 +260,8 @@ subscriptions _ =
         ]
 
 
-login : LoginForm -> Cmd msg
-login form =
+submitLogin : LoginForm -> Cmd msg
+submitLogin form =
     W.Login form
         |> W.sendMessage
 
@@ -279,7 +282,7 @@ update msg model =
             ( { model | loginForm = name }, Cmd.none )
 
         Login ->
-            ( model, login model.loginForm )
+            ( model, submitLogin model.loginForm )
 
         Logout ->
             ( model, W.logout )
@@ -323,17 +326,7 @@ update msg model =
                         | swSubscription = cu.subscription
                         , swVapidKey = cu.vapidKey
                         , permissionStatus = cu.permissionStatus
-                        , loggedIn =
-                            Maybe.map
-                                (\auth ->
-                                    case auth of
-                                        W.LoggedOut ->
-                                            False
-
-                                        W.LoggedIn _ ->
-                                            True
-                                )
-                                cu.auth
+                        , login = cu.login
                       }
                     , Cmd.none
                     )
