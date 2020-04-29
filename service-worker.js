@@ -9,7 +9,6 @@ app.ports.postMessageInternal.subscribe(msg => {
     channel.postMessage(msg);
 });
 
-// TODO abstract Fetch
 app.ports.getVapidKey.subscribe(() => {
     fetch("vapid-public-key")
         .then(response => {

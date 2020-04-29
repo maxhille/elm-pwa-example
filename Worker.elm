@@ -2,6 +2,7 @@ port module Worker exposing
     ( ClientMessage(..)
     , ClientState
     , Login(..)
+    , Post
     , Subscription(..)
     , User
     , logout
@@ -48,6 +49,10 @@ main =
         }
 
 
+type alias Post =
+    String
+
+
 type alias Model =
     { subscription : Maybe Bool
     , vapidKey : Maybe String
@@ -55,6 +60,7 @@ type alias Model =
     , login : Maybe Login
     , db : Maybe DB.DB
     , authSaved : Bool
+    , posts : List Post
     }
 
 
@@ -86,6 +92,7 @@ type ClientMessage
     | Hello
     | Login String
     | Logout
+    | SubmitPost String
 
 
 type alias ClientState =
@@ -93,6 +100,7 @@ type alias ClientState =
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     , login : Maybe Login
+    , posts : List Post
     }
 
 
@@ -196,11 +204,12 @@ decodePermissionStatus =
 
 decodeClientState : JD.Decoder ClientState
 decodeClientState =
-    JD.map4 ClientState
+    JD.map5 ClientState
         (JD.field "subscription" (JD.nullable JD.bool))
         (JD.field "vapidKey" (JD.nullable JD.string))
         (JD.field "permissionStatus" (JD.nullable decodePermissionStatus))
         (JD.field "login" (JD.nullable decodeLogin))
+        (JD.field "posts" (JD.list JD.string))
 
 
 port onNewSubscriptionInternal : (JD.Value -> msg) -> Sub msg
@@ -212,15 +221,16 @@ onNewSubscription msg =
 
 
 encodeClientstate : ClientState -> JE.Value
-encodeClientstate v =
+encodeClientstate cs =
     JE.object
-        [ ( "subscription", maybeNull JE.bool v.subscription )
-        , ( "vapidKey", encodeMaybeString v.vapidKey )
+        [ ( "subscription", maybeNull JE.bool cs.subscription )
+        , ( "vapidKey", encodeMaybeString cs.vapidKey )
         , ( "permissionStatus"
-          , Maybe.map P.permissionStatusString v.permissionStatus
+          , Maybe.map P.permissionStatusString cs.permissionStatus
                 |> encodeMaybeString
           )
-        , ( "login", encodeLogin v.login )
+        , ( "login", encodeLogin cs.login )
+        , ( "posts", JE.list JE.string cs.posts )
         ]
 
 
@@ -232,6 +242,7 @@ init _ =
       , login = Nothing
       , db = Nothing
       , authSaved = False
+      , posts = []
       }
     , Cmd.batch
         [ getVapidKey ()
@@ -365,6 +376,9 @@ update msg model =
                                 )
                             )
 
+                        SubmitPost text ->
+                            ( { model | posts = text :: model.posts }, Cmd.none )
+
                         Logout ->
                             ( { model | login = Just LoggedOut }, Cmd.none )
 
@@ -436,6 +450,7 @@ clientState model =
     , vapidKey = model.vapidKey
     , permissionStatus = model.permissionStatus
     , login = model.login
+    , posts = model.posts
     }
 
 
@@ -503,6 +518,12 @@ encodeClientMessage cm =
                 [ ( "type", JE.string "hello" )
                 ]
 
+        SubmitPost text ->
+            JE.object
+                [ ( "type", JE.string "post" )
+                , ( "text", JE.string text )
+                ]
+
 
 decodeClientMessage : JD.Decoder ClientMessage
 decodeClientMessage =
@@ -518,6 +539,10 @@ decodeClientMessage =
                         JD.field "name" JD.string
                             |> JD.andThen (\name -> JD.succeed (Login name))
 
+                    "post" ->
+                        JD.field "text" JD.string
+                            |> JD.andThen (\text -> JD.succeed (SubmitPost text))
+
                     "hello" ->
                         JD.succeed Hello
 
@@ -525,5 +550,5 @@ decodeClientMessage =
                         JD.succeed Logout
 
                     _ ->
-                        JD.fail <| "unknown message: " ++ typ
+                        JD.fail <| "unknown message type: " ++ typ
             )

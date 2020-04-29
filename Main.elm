@@ -1,4 +1,4 @@
-port module Main exposing (main)
+module Main exposing (main)
 
 import Browser
 import Html exposing (Html, text)
@@ -10,18 +10,9 @@ import ServiceWorker as SW
 import Worker as W
 
 
-port postMessage : String -> Cmd msg
-
-
-port updatePosts : (List Post -> msg) -> Sub msg
-
-
-port refreshPosts : () -> Cmd msg
-
-
 type alias Model =
     { text : String
-    , posts : List Post
+    , posts : List W.Post
     , swavailability : SW.Availability
     , swRegistration : SW.Registration
     , swSubscription : Maybe Bool
@@ -36,16 +27,9 @@ type alias LoginForm =
     String
 
 
-type alias Post =
-    { text : String
-    , sync : String
-    }
-
-
 type Msg
     = TextChanged String
     | SendAndClear
-    | PostsChanged (List Post)
     | SWAvailability SW.Availability
     | SWRegistration SW.Registration
     | SWClientUpdate (Result JD.Error W.ClientState)
@@ -220,12 +204,12 @@ viewPwaInfo model =
         ]
 
 
-viewPost : Post -> Html Msg
+viewPost : W.Post -> Html Msg
 viewPost post =
     Html.li []
-        [ text post.text
+        [ text post
         , text
-            (case post.sync of
+            (case "PENDING" of
                 "PENDING" ->
                     " ⌛"
 
@@ -266,17 +250,19 @@ submitLogin form =
         |> W.sendMessage
 
 
+submitPost : String -> Cmd msg
+submitPost text =
+    W.SubmitPost text |> W.sendMessage
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         SendAndClear ->
-            ( { model | text = "" }, postMessage model.text )
+            ( { model | text = "" }, submitPost model.text )
 
         TextChanged newText ->
             ( { model | text = newText }, Cmd.none )
-
-        PostsChanged newPosts ->
-            ( { model | posts = newPosts }, Cmd.none )
 
         ChangedName name ->
             ( { model | loginForm = name }, Cmd.none )
@@ -327,6 +313,7 @@ update msg model =
                         , swVapidKey = cu.vapidKey
                         , permissionStatus = cu.permissionStatus
                         , login = cu.login
+                        , posts = cu.posts
                       }
                     , Cmd.none
                     )
