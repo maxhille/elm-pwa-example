@@ -32,6 +32,9 @@ port saveSubscription : JE.Value -> Cmd msg
 port getSubscription : JE.Value -> Cmd msg
 
 
+port getSubscriptionReply : (Bool -> msg) -> Sub msg
+
+
 port onLoginResult : (JD.Value -> msg) -> Sub msg
 
 
@@ -45,7 +48,7 @@ main =
 
 
 type alias Model =
-    { subscription : Maybe Subscription
+    { subscription : Maybe Bool
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     , auth : Maybe Auth
@@ -63,6 +66,7 @@ type Msg
     | QueryResult DB.QueryResult
     | LoginResult (Result JD.Error Auth)
     | NewSubscription (Result JD.Error Subscription)
+    | HasSubscription Bool
 
 
 type Auth
@@ -81,7 +85,7 @@ type ClientMessage
 
 
 type alias ClientState =
-    { subscription : Maybe Subscription
+    { subscription : Maybe Bool
     , vapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     , auth : Maybe Auth
@@ -96,12 +100,17 @@ onClientUpdate msg =
 
 encodeMaybeString : Maybe String -> JE.Value
 encodeMaybeString ms =
-    case ms of
+    maybeNull JE.string ms
+
+
+maybeNull : (a -> JE.Value) -> Maybe a -> JE.Value
+maybeNull encoder maybe =
+    case maybe of
         Nothing ->
             JE.null
 
-        Just s ->
-            JE.string s
+        Just a ->
+            encoder a
 
 
 encodeSubscription : Maybe Subscription -> JE.Value
@@ -228,7 +237,7 @@ decodePermissionStatus =
 decodeClientState : JD.Decoder ClientState
 decodeClientState =
     JD.map4 ClientState
-        (JD.field "subscription" (JD.nullable decodeSubscription))
+        (JD.field "subscription" (JD.nullable JD.bool))
         (JD.field "vapidKey" (JD.nullable JD.string))
         (JD.field "permissionStatus" (JD.nullable decodePermissionStatus))
         (JD.field "auth" (JD.nullable decodeAuth))
@@ -245,7 +254,7 @@ onNewSubscription msg =
 encodeClientstate : ClientState -> JE.Value
 encodeClientstate v =
     JE.object
-        [ ( "subscription", encodeSubscription v.subscription )
+        [ ( "subscription", maybeNull JE.bool v.subscription )
         , ( "vapidKey", encodeMaybeString v.vapidKey )
         , ( "permissionStatus"
           , Maybe.map P.permissionStatusString v.permissionStatus
@@ -361,7 +370,7 @@ update msg model =
                     ( { model | auth = Just LoggedOut }, Cmd.none )
 
                 Ok auth ->
-                    ( { model | auth = Just auth }, Cmd.none )
+                    ( { model | auth = Just auth }, checkSubscription auth )
 
         LoginResult (Err _) ->
             ( model, Cmd.none )
@@ -411,9 +420,12 @@ update msg model =
                     ( model, Cmd.none )
 
                 Ok subscription ->
-                    ( { model | subscription = Just subscription }
+                    ( model
                     , maybeSaveSubscription model.auth subscription
                     )
+
+        HasSubscription subscription ->
+            ( { model | subscription = Just subscription }, Cmd.none )
 
 
 maybeSaveSubscription : Maybe Auth -> Subscription -> Cmd msg
@@ -478,6 +490,7 @@ subscriptions _ =
         , DB.createObjectStoreResult StoreCreated
         , DB.queryResult QueryResult
         , onNewSubscription NewSubscription
+        , getSubscriptionReply HasSubscription
         ]
 
 

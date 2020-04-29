@@ -158,6 +158,8 @@ func (app *App) getSubscription(w http.ResponseWriter, req *http.Request) {
 	uid := app.user.Current(ctx)
 	_, err := app.db.ReadSubscription(ctx, uid)
 	switch err {
+	case nil:
+		w.WriteHeader(http.StatusNoContent)
 	case ErrNoSuchEntity:
 		msg := fmt.Sprintf("no subscription found (%v)", err)
 		w.WriteHeader(http.StatusNotFound)

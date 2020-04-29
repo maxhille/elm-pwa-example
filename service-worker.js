@@ -60,8 +60,8 @@ app.ports.saveSubscription.subscribe(opts => {
             p256dh: btoa(opts.payload.p256dh)
         })
     }).then(response => {
-        // TODO do something with the reply
-        //return response.json();
+        var result = response.status == 201;
+        app.ports.getSubscriptionReply.send(result);
     });
 });
 
@@ -70,13 +70,10 @@ app.ports.getSubscription.subscribe(opts => {
         headers: new Headers({
             Authorization: opts.auth
         })
-    })
-        .then(response => {
-            return response.json();
-        })
-        .then(json => {
-            app.ports.getSubscriptionReply.send(json);
-        });
+    }).then(response => {
+        var result = response.status == 204;
+        app.ports.getSubscriptionReply.send(result);
+    });
 });
 
 self.navigator.permissions.query({ name: "notifications" }).then(ps => {

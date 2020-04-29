@@ -24,7 +24,7 @@ type alias Model =
     , posts : List Post
     , swavailability : SW.Availability
     , swRegistration : SW.Registration
-    , swSubscription : Maybe W.Subscription
+    , swSubscription : Maybe Bool
     , swVapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     , loggedIn : Maybe Bool
@@ -164,12 +164,11 @@ viewPwaInfo model =
                         text "unknown"
 
                     Just subscription ->
-                        case subscription of
-                            W.NoSubscription ->
-                                text "No subscription"
+                        if subscription then
+                            text "Has subscription"
 
-                            W.Subscribed _ ->
-                                text "Has subscription"
+                        else
+                            text "No subscription"
                 ]
             ]
         , Html.tr []
