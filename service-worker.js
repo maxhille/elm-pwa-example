@@ -118,38 +118,9 @@ self.addEventListener("fetch", function(event) {
     );
 });
 
-self.addEventListener("sync", sync);
-
-function sync() {
-    var objectStore = db.transaction("posts").objectStore("posts");
-    return adaptStoreToPromise(objectStore.getAll())
-        .then(function(event) {
-            var result = event.target.result;
-            var toSync = result.filter(r => r.sync == "PENDING");
-            console.log("read from db", toSync);
-            return forEachPromise(toSync, syncPost);
-        })
-        .then(
-            fetch("api/posts")
-                .then(response => response.json())
-                .then(function(posts) {
-                    var transaction = db.transaction("posts", "readwrite");
-                    var store = transaction.objectStore("posts");
-                    return Promise.all(
-                        posts.map(post => {
-                            post["sync"] = "SYNCED";
-                            return store.put(post);
-                        })
-                    )
-                        .then(function() {
-                            return transaction.complete;
-                        })
-                        .then(function() {
-                            notifyClients();
-                        });
-                })
-        );
-}
+self.addEventListener("sync", event => {
+    app.ports.onSync.send()
+});
 
 self.addEventListener("push", function(event) {
     console.log("[Service Worker] Push Received.");
@@ -166,81 +137,6 @@ function notify() {
     self.registration.showNotification(title, options);
 }
 
-function adaptStoreToPromise(idbRequest) {
-    return new Promise(function(resolve, reject) {
-        idbRequest.onsuccess = function(event) {
-            resolve(event);
-        };
-        idbRequest.onerror = function(event) {
-            reject(event);
-        };
-    });
-}
-
-function syncPost(post) {
-    return fetch("api/post", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json; charset=utf-8"
-        },
-        body: JSON.stringify(post)
-    }).then(function(response) {
-        response.json().then(function(json) {
-            var deleteReq = db
-                .transaction("posts", "readwrite")
-                .objectStore("posts")
-                .delete(post.id);
-            deleteReq.onsuccess = function() {
-                json["sync"] = "SYNCED";
-                var insertReq = db
-                    .transaction("posts", "readwrite")
-                    .objectStore("posts")
-                    .add(json);
-                insertReq.onsuccess = notifyClients;
-            };
-        });
-    });
-}
-
 self.addEventListener("message", event => {
     app.ports.onMessageInternal.send(event.data);
 });
-
-function oldOnMessage(event) {
-    var postsObjectStore = db
-        .transaction("posts", "readwrite")
-        .objectStore("posts");
-    var post = event.data;
-    post["sync"] = "PENDING";
-    post["id"] = uuidv4();
-    var request = postsObjectStore.add(post);
-    request.onsuccess = function(event) {
-        self.clients.matchAll().then(clients => {
-            clients.forEach(client => client.postMessage("update-db"));
-        });
-        self.registration.sync.register("sync-posts");
-    };
-}
-/**
- *
- * @param items An array of items.
- * @param fn A function that accepts an item from the array and returns a promise.
- * @returns {Promise}
- */
-function forEachPromise(items, fn) {
-    return items.reduce(function(promise, item) {
-        return promise.then(function() {
-            return fn(item);
-        });
-    }, Promise.resolve());
-}
-
-// https://stackoverflow.com/a/2117523/470509
-function uuidv4() {
-    return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
-        (
-            c ^
-            (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
-        ).toString(16)
-    );
-}

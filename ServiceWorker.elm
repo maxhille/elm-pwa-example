@@ -6,6 +6,7 @@ port module ServiceWorker exposing
     , getAvailability
     , getRegistration
     , onMessage
+    , onSync
     , postMessage
     , register
     , sendBroadcast
@@ -83,6 +84,9 @@ port subscribeInternal : String -> Cmd msg
 
 
 port sendBroadcast : Bool -> Cmd msg
+
+
+port onSync : (String -> msg) -> Sub msg
 
 
 checkAvailability : Cmd msg

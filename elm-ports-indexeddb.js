@@ -5,6 +5,7 @@ var ElmPortsIndexedDB = {
             var request = indexedDB.open(opts.name, opts.version);
             request.onerror = function(event) {
                 // TODO are there error msgs or something?
+                console.log(event.currenTarget.error);
                 app.ports.openResponseInternal.send({
                     name: opts.name,
                     result: "error"

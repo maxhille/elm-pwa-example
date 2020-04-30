@@ -228,9 +228,9 @@ func (app *App) login(w http.ResponseWriter, req *http.Request) {
 	}
 
 	r := struct {
-		Name  string `json:"name"`
+		User  User   `json:"user"`
 		Token string `json:"token"`
-	}{Name: u2.Name, Token: u2.ID.String()}
+	}{User: u2, Token: u2.ID.String()}
 
 	json, err := json.Marshal(r)
 	if err != nil {

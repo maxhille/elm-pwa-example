@@ -17,6 +17,9 @@ import Json.Encode as JE
 import Permissions as P
 import Platform
 import ServiceWorker as SW
+import Task
+import Time
+import UUID exposing (UUID)
 
 
 port getVapidKey : () -> Cmd msg
@@ -50,7 +53,12 @@ main =
 
 
 type alias Post =
-    String
+    { id : UUID
+    , user : User
+    , time : Time.Posix
+    , text : String
+    , pending : Bool
+    }
 
 
 type alias Model =
@@ -61,6 +69,7 @@ type alias Model =
     , db : Maybe DB.DB
     , authSaved : Bool
     , posts : List Post
+    , uuidNamespace : UUID
     }
 
 
@@ -74,16 +83,22 @@ type Msg
     | LoginResult (Result JD.Error Login)
     | NewSubscription (Result JD.Error Subscription)
     | HasSubscription Bool
+    | NewPost Post
+    | Sync String
 
 
 type Login
     = LoggedOut
-    | LoggedIn User
+    | LoggedIn User Token
+
+
+type alias Token =
+    String
 
 
 type alias User =
-    { name : String
-    , token : String
+    { id : String
+    , name : String
     }
 
 
@@ -142,11 +157,11 @@ encodeLogin maybe =
 
         Just login ->
             case login of
-                LoggedIn data ->
+                LoggedIn user token ->
                     JE.object
                         [ ( "type", JE.string "logged-in" )
-                        , ( "name", JE.string data.name )
-                        , ( "token", JE.string data.token )
+                        , ( "user", encodeUser user )
+                        , ( "token", JE.string token )
                         ]
 
                 LoggedOut ->
@@ -162,8 +177,8 @@ decodeLogin =
             (\typ ->
                 case typ of
                     "logged-in" ->
-                        JD.map2 (\name token -> LoggedIn { name = name, token = token })
-                            (JD.field "name" JD.string)
+                        JD.map2 LoggedIn
+                            (JD.field "user" userDecoder)
                             (JD.field "token" JD.string)
 
                     "logged-out" ->
@@ -209,7 +224,7 @@ decodeClientState =
         (JD.field "vapidKey" (JD.nullable JD.string))
         (JD.field "permissionStatus" (JD.nullable decodePermissionStatus))
         (JD.field "login" (JD.nullable decodeLogin))
-        (JD.field "posts" (JD.list JD.string))
+        (JD.field "posts" (JD.list postDecoder))
 
 
 port onNewSubscriptionInternal : (JD.Value -> msg) -> Sub msg
@@ -230,7 +245,50 @@ encodeClientstate cs =
                 |> encodeMaybeString
           )
         , ( "login", encodeLogin cs.login )
-        , ( "posts", JE.list JE.string cs.posts )
+        , ( "posts", JE.list encodePost cs.posts )
+        ]
+
+
+encodePost : Post -> JE.Value
+encodePost post =
+    JE.object
+        [ ( "user", encodeUser post.user )
+        , ( "id", JE.string (UUID.toString post.id) )
+        , ( "time", JE.int (Time.posixToMillis post.time) )
+        , ( "text", JE.string post.text )
+        , ( "pending", JE.bool post.pending )
+        ]
+
+
+postDecoder : JD.Decoder Post
+postDecoder =
+    JD.map5 Post
+        (JD.field "id" uuidDecoder)
+        (JD.field "user" userDecoder)
+        (JD.field "time" (JD.map Time.millisToPosix JD.int))
+        (JD.field "text" JD.string)
+        (JD.field "pending" JD.bool)
+
+
+uuidDecoder : JD.Decoder UUID
+uuidDecoder =
+    JD.string
+        |> JD.andThen
+            (\s ->
+                case UUID.fromString s of
+                    Err _ ->
+                        JD.fail ("could not parse UUID from " ++ s)
+
+                    Ok uuid ->
+                        JD.succeed uuid
+            )
+
+
+encodeUser : User -> JE.Value
+encodeUser user =
+    JE.object
+        [ ( "id", JE.string user.id )
+        , ( "name", JE.string user.name )
         ]
 
 
@@ -243,6 +301,8 @@ init _ =
       , db = Nothing
       , authSaved = False
       , posts = []
+      , uuidNamespace =
+            UUID.forName "http://github.com/maxhille" UUID.urlNamespace
       }
     , Cmd.batch
         [ getVapidKey ()
@@ -291,8 +351,8 @@ checkSubscription login =
         LoggedOut ->
             Cmd.none
 
-        LoggedIn loggedIn ->
-            authenticatedOpts loggedIn Nothing |> getSubscription
+        LoggedIn _ token ->
+            authenticatedOpts token Nothing |> getSubscription
 
 
 logUpdate :
@@ -317,7 +377,12 @@ update msg model =
         OnDBOpen ( db, resp ) ->
             case resp of
                 DB.UpgradeNeeded ->
-                    ( model, DB.createObjectStore db "login" )
+                    ( model
+                    , Cmd.batch
+                        [ DB.createObjectStore db "login"
+                        , DB.createObjectStore db "posts"
+                        ]
+                    )
 
                 DB.Success ->
                     ( { model | db = Just db }, getLogin db )
@@ -332,12 +397,9 @@ update msg model =
             let
                 result =
                     JD.decodeValue decodeLogin json
-
-                _ =
-                    Debug.log "QueryResult JSON " result
             in
             case result of
-                Err err ->
+                Err _ ->
                     ( { model | login = Just LoggedOut }, Cmd.none )
 
                 Ok login ->
@@ -377,7 +439,7 @@ update msg model =
                             )
 
                         SubmitPost text ->
-                            ( { model | posts = text :: model.posts }, Cmd.none )
+                            ( model, newPost model text )
 
                         Logout ->
                             ( { model | login = Just LoggedOut }, Cmd.none )
@@ -401,6 +463,54 @@ update msg model =
         HasSubscription subscription ->
             ( { model | subscription = Just subscription }, Cmd.none )
 
+        Sync _ ->
+            ( model, Cmd.none )
+
+        NewPost post ->
+            ( model, savePost model.db post )
+
+
+savePost : Maybe DB.DB -> Post -> Cmd Msg
+savePost maybeDb post =
+    case maybeDb of
+        Nothing ->
+            Cmd.none
+
+        Just db ->
+            DB.put { db = db, name = "posts" }
+                (UUID.toString post.id)
+                (encodePost post)
+
+
+newPost : Model -> String -> Cmd Msg
+newPost model text =
+    case model.login of
+        Nothing ->
+            Cmd.none
+
+        Just login ->
+            case login of
+                LoggedOut ->
+                    Cmd.none
+
+                LoggedIn user _ ->
+                    Task.perform
+                        (\time ->
+                            NewPost
+                                { id = uuidForTime model time
+                                , user = user
+                                , text = text
+                                , time = time
+                                , pending = True
+                                }
+                        )
+                        Time.now
+
+
+uuidForTime : Model -> Time.Posix -> UUID
+uuidForTime model time =
+    UUID.forName (String.fromInt (Time.posixToMillis time)) model.uuidNamespace
+
 
 maybeSaveSubscription : Maybe Login -> Subscription -> Cmd msg
 maybeSaveSubscription maybeLogin subscription =
@@ -413,20 +523,20 @@ maybeSaveSubscription maybeLogin subscription =
                 LoggedOut ->
                     Cmd.none
 
-                LoggedIn loggedIn ->
+                LoggedIn _ token ->
                     case subscription of
                         NoSubscription ->
                             Cmd.none
 
                         Subscribed data ->
-                            authenticatedOpts loggedIn
+                            authenticatedOpts token
                                 (Just (encodeSubscriptionData data))
                                 |> saveSubscription
 
 
-authenticatedOpts : { token : String, name : String } -> Maybe JE.Value -> JE.Value
-authenticatedOpts auth maybePayload =
-    ( "auth", JE.string auth.token )
+authenticatedOpts : Token -> Maybe JE.Value -> JE.Value
+authenticatedOpts token maybePayload =
+    ( "auth", JE.string token )
         :: (case maybePayload of
                 Nothing ->
                     []
@@ -466,16 +576,24 @@ subscriptions _ =
         , DB.queryResult QueryResult
         , onNewSubscription NewSubscription
         , getSubscriptionReply HasSubscription
+        , SW.onSync Sync
         ]
 
 
 decodeLoginResult : JD.Value -> Result JD.Error Login
 decodeLoginResult =
     JD.decodeValue
-        (JD.map2 (\name token -> LoggedIn { name = name, token = token })
-            (JD.field "name" JD.string)
+        (JD.map2 LoggedIn
+            (JD.field "user" userDecoder)
             (JD.field "token" JD.string)
         )
+
+
+userDecoder : JD.Decoder User
+userDecoder =
+    JD.map2 User
+        (JD.field "id" JD.string)
+        (JD.field "name" JD.string)
 
 
 sendMessage : ClientMessage -> Cmd msg

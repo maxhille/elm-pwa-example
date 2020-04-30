@@ -62,7 +62,7 @@ view model =
 
                 Just login ->
                     case login of
-                        W.LoggedIn user ->
+                        W.LoggedIn user _ ->
                             viewChat model user
 
                         W.LoggedOut ->
@@ -207,7 +207,7 @@ viewPwaInfo model =
 viewPost : W.Post -> Html Msg
 viewPost post =
     Html.li []
-        [ text post
+        [ text post.text
         , text
             (case "PENDING" of
                 "PENDING" ->
