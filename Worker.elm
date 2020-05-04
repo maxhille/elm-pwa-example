@@ -79,12 +79,15 @@ type Msg
     | VapidkeyResult String
     | PermissionChange P.PermissionStatus
     | StoreCreated (Result JD.Error DB.ObjectStore)
-    | QueryResult DB.QueryResult
+    | QueryError String
     | LoginResult (Result JD.Error Login)
     | NewSubscription (Result JD.Error Subscription)
     | HasSubscription Bool
     | NewPost Post
     | Sync String
+    | OnPutResult (Result JD.Error DB.PutResult)
+    | LoginQueryResult JD.Value
+    | PostsQueryResult JD.Value
 
 
 type Login
@@ -330,9 +333,9 @@ extendedUpdate msg model =
     )
 
 
-getLogin : DB.DB -> Cmd Msg
-getLogin db =
-    DB.query { db = db, name = "login" }
+queryLogin : DB.DB -> Cmd Msg
+queryLogin db =
+    DB.get { db = db, name = "login" } (DB.GetKey "key")
 
 
 maybePutLogin : Maybe DB.DB -> Login -> Cmd Msg
@@ -385,15 +388,39 @@ update msg model =
                     )
 
                 DB.Success ->
-                    ( { model | db = Just db }, getLogin db )
+                    ( { model | db = Just db }
+                    , Cmd.batch
+                        [ queryLogin db
+                        , queryPosts db
+                        ]
+                    )
 
                 _ ->
                     ( model, Cmd.none )
 
-        StoreCreated store ->
+        StoreCreated _ ->
             ( model, openDb )
 
-        QueryResult json ->
+        QueryError err ->
+            let
+                _ =
+                    Debug.log "Query error" err
+            in
+            ( model, Cmd.none )
+
+        PostsQueryResult json ->
+            let
+                result =
+                    JD.decodeValue postsDecoder json
+            in
+            case result of
+                Err _ ->
+                    ( { model | login = Just LoggedOut }, Cmd.none )
+
+                Ok posts ->
+                    ( { model | posts = posts }, Cmd.none )
+
+        LoginQueryResult json ->
             let
                 result =
                     JD.decodeValue decodeLogin json
@@ -468,6 +495,19 @@ update msg model =
 
         NewPost post ->
             ( model, savePost model.db post )
+
+        OnPutResult result ->
+            case result of
+                Err _ ->
+                    ( model, Cmd.none )
+
+                Ok putResult ->
+                    ( model, queryPosts putResult.store.db )
+
+
+queryPosts : DB.DB -> Cmd Msg
+queryPosts db =
+    DB.get { db = db, name = "posts" } DB.GetAll
 
 
 savePost : Maybe DB.DB -> Post -> Cmd Msg
@@ -573,11 +613,34 @@ subscriptions _ =
         , P.onPermissionChange PermissionChange
         , DB.openResponse OnDBOpen
         , DB.createObjectStoreResult StoreCreated
-        , DB.queryResult QueryResult
+        , onQueryResult
         , onNewSubscription NewSubscription
         , getSubscriptionReply HasSubscription
         , SW.onSync Sync
+        , DB.putResult OnPutResult
         ]
+
+
+onQueryResult : Sub Msg
+onQueryResult =
+    DB.getResult
+        (\qr ->
+            case qr of
+                Err err ->
+                    QueryError (JD.errorToString err)
+
+                Ok ( store, _, data ) ->
+                    case store.name of
+                        "login" ->
+                            LoginQueryResult data
+
+                        "posts" ->
+                            PostsQueryResult data
+
+                        _ ->
+                            QueryError
+                                ("result not handled for store" ++ store.name)
+        )
 
 
 decodeLoginResult : JD.Value -> Result JD.Error Login
@@ -586,6 +649,26 @@ decodeLoginResult =
         (JD.map2 LoggedIn
             (JD.field "user" userDecoder)
             (JD.field "token" JD.string)
+        )
+
+
+postsDecoder : JD.Decoder (List Post)
+postsDecoder =
+    JD.list
+        (JD.map5
+            (\id user time text pending ->
+                { id = id
+                , user = user
+                , time = Time.millisToPosix time
+                , text = text
+                , pending = pending
+                }
+            )
+            (JD.field "id" uuidDecoder)
+            (JD.field "user" userDecoder)
+            (JD.field "time" JD.int)
+            (JD.field "text" JD.string)
+            (JD.field "pending" JD.bool)
         )
 
 

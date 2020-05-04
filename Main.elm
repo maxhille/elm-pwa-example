@@ -7,6 +7,7 @@ import Html.Events as HE
 import Json.Decode as JD
 import Permissions as P
 import ServiceWorker as SW
+import Time
 import Worker as W
 
 
@@ -207,7 +208,9 @@ viewPwaInfo model =
 viewPost : W.Post -> Html Msg
 viewPost post =
     Html.li []
-        [ text post.text
+        [ text post.user.name
+        , text (formatTime post.time)
+        , text post.text
         , text
             (case "PENDING" of
                 "PENDING" ->
@@ -217,6 +220,16 @@ viewPost post =
                     " ✅ "
             )
         ]
+
+
+formatTime : Time.Posix -> String
+formatTime time =
+    String.fromInt (Time.toHour Time.utc time)
+        ++ ":"
+        ++ String.fromInt (Time.toMinute Time.utc time)
+        ++ ":"
+        ++ String.fromInt (Time.toSecond Time.utc time)
+        ++ "z"
 
 
 init : () -> ( Model, Cmd Msg )

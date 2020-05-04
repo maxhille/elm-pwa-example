@@ -1,15 +1,18 @@
 port module IndexedDB exposing
     ( DB
+    , GetResult
     , ObjectStore
     , OpenResponse(..)
-    , QueryResult
+    , PutResult
+    , Query(..)
     , createObjectStore
     , createObjectStoreResult
+    , get
+    , getResult
     , openRequest
     , openResponse
     , put
-    , query
-    , queryResult
+    , putResult
     )
 
 import Json.Decode as JD
@@ -22,12 +25,17 @@ type OpenResponse
     | Error
 
 
-type alias QueryResult =
-    JD.Value
+type alias GetResult =
+    ( ObjectStore, Query, JD.Value )
 
 
 type alias DB =
     String
+
+
+type Query
+    = GetAll
+    | GetKey String
 
 
 type alias ObjectStore =
@@ -36,7 +44,28 @@ type alias ObjectStore =
     }
 
 
+type alias PutResult =
+    { store : ObjectStore
+    , key : Maybe String
+    }
+
+
 port putInternal : JE.Value -> Cmd msg
+
+
+port putResultInternal : (JD.Value -> msg) -> Sub msg
+
+
+putResult : (Result JD.Error PutResult -> msg) -> Sub msg
+putResult msg =
+    putResultInternal (JD.decodeValue decodePutResult >> msg)
+
+
+decodePutResult : JD.Decoder PutResult
+decodePutResult =
+    JD.map2 PutResult
+        (JD.field "store" objectStoreDecoder)
+        (JD.field "key" (JD.nullable JD.string))
 
 
 put : ObjectStore -> String -> JE.Value -> Cmd msg
@@ -50,24 +79,55 @@ put os key data =
         |> putInternal
 
 
-port queryInternal : JE.Value -> Cmd msg
+port getInternal : JE.Value -> Cmd msg
 
 
-query : ObjectStore -> Cmd msg
-query store =
-    JE.object
-        [ ( "db", JE.string store.db )
-        , ( "name", JE.string store.name )
+get : ObjectStore -> Query -> Cmd msg
+get store query =
+    List.concat
+        [ [ ( "db", JE.string store.db )
+          , ( "name", JE.string store.name )
+          ]
+        , case query of
+            GetKey key ->
+                [ ( "key", JE.string key ) ]
+
+            GetAll ->
+                [ ( "key", JE.null ) ]
         ]
-        |> queryInternal
+        |> JE.object
+        |> getInternal
 
 
-port queryResultInternal : (JD.Value -> msg) -> Sub msg
+port getResultInternal : (JD.Value -> msg) -> Sub msg
 
 
-queryResult : (QueryResult -> msg) -> Sub msg
-queryResult =
-    queryResultInternal
+getResult : (Result JD.Error GetResult -> msg) -> Sub msg
+getResult msg =
+    getResultInternal (JD.decodeValue resultDecoder >> msg)
+
+
+resultDecoder : JD.Decoder GetResult
+resultDecoder =
+    JD.map3
+        (\store query data -> ( store, query, data ))
+        (JD.field "store" objectStoreDecoder)
+        (JD.field "query" queryDecoder)
+        (JD.field "data" JD.value)
+
+
+queryDecoder : JD.Decoder Query
+queryDecoder =
+    JD.nullable JD.string
+        |> JD.andThen
+            (\maybe ->
+                case maybe of
+                    Nothing ->
+                        GetAll |> JD.succeed
+
+                    Just key ->
+                        GetKey key |> JD.succeed
+            )
 
 
 port openResponseInternal : (JD.Value -> msg) -> Sub msg
@@ -84,16 +144,15 @@ port createObjectStoreResultInternal : (JD.Value -> msg) -> Sub msg
 
 createObjectStoreResult : (Result JD.Error ObjectStore -> msg) -> Sub msg
 createObjectStoreResult msg =
-    createObjectStoreResultInternal (decodeObjectStore >> msg)
+    createObjectStoreResultInternal (JD.decodeValue objectStoreDecoder >> msg)
 
 
-decodeObjectStore : JD.Value -> Result JD.Error ObjectStore
-decodeObjectStore =
+objectStoreDecoder : JD.Decoder ObjectStore
+objectStoreDecoder =
     JD.map2
         (\db name -> { db = db, name = name })
         (JD.field "db" JD.string)
         (JD.field "name" JD.string)
-        |> JD.decodeValue
 
 
 createObjectStore : DB -> String -> Cmd msg

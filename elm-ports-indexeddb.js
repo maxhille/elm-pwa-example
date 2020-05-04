@@ -33,14 +33,25 @@ var ElmPortsIndexedDB = {
             app.ports.createObjectStoreResultInternal.send(opts.name);
         });
 
-        app.ports.queryInternal.subscribe(opts => {
+        app.ports.getInternal.subscribe(opts => {
             // https://developer.mozilla.org/en-US/docs/Web/API/IDBObjectStore/get
             var db = ElmPortsIndexedDB.dbs[opts.db];
             var tx = db.transaction([opts.name], "readwrite");
             var store = tx.objectStore(opts.name);
-            var req = store.get("key");
+            if (opts.key) {
+                var req = store.get(opts.key);
+            } else {
+                var req = store.getAll();
+            }
             req.onsuccess = ev => {
-                app.ports.queryResultInternal.send(req.result);
+                app.ports.getResultInternal.send({
+                    store: {
+                        db: opts.db,
+                        name: opts.name
+                    },
+                    query: opts.key,
+                    data: req.result
+                });
             };
         });
 
@@ -51,7 +62,13 @@ var ElmPortsIndexedDB = {
             var store = tx.objectStore(opts.name);
             var req = store.put(opts.data, opts.key);
             req.onsuccess = ev => {
-//                app.ports.putResultInternal.send({});
+                app.ports.putResultInternal.send({
+                    store: {
+                        db: opts.db,
+                        name: opts.name
+                    },
+                    key: opts.key
+                });
             };
         });
     }
