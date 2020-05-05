@@ -17,6 +17,7 @@ type alias Model =
     , swavailability : SW.Availability
     , swRegistration : SW.Registration
     , swSubscription : Maybe Bool
+    , swErrors : List String
     , swVapidKey : Maybe String
     , permissionStatus : Maybe P.PermissionStatus
     , login : Maybe W.Login
@@ -202,6 +203,16 @@ viewPwaInfo model =
                                     ]
                 ]
             ]
+        , Html.tr []
+            [ Html.td [] [ text "Service Worker errors" ]
+            , Html.td []
+                [ Html.ul []
+                    (List.map
+                        (\error -> Html.li [] [ Html.text error ])
+                        model.swErrors
+                    )
+                ]
+            ]
         ]
 
 
@@ -243,6 +254,7 @@ init _ =
       , permissionStatus = Nothing
       , loginForm = ""
       , login = Nothing
+      , swErrors = []
       }
     , SW.checkAvailability
     )
@@ -327,6 +339,7 @@ update msg model =
                         , permissionStatus = cu.permissionStatus
                         , login = cu.login
                         , posts = cu.posts
+                        , swErrors = model.swErrors
                       }
                     , Cmd.none
                     )

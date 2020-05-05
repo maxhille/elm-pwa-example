@@ -73,6 +73,7 @@ type alias Model =
     , authSaved : Bool
     , posts : List Post
     , uuidNamespace : UUID
+    , errors : List String
     }
 
 
@@ -122,6 +123,7 @@ type alias ClientState =
     , permissionStatus : Maybe P.PermissionStatus
     , login : Maybe Login
     , posts : List Post
+    , swErrors : List String
     }
 
 
@@ -225,12 +227,13 @@ decodePermissionStatus =
 
 decodeClientState : JD.Decoder ClientState
 decodeClientState =
-    JD.map5 ClientState
+    JD.map6 ClientState
         (JD.field "subscription" (JD.nullable JD.bool))
         (JD.field "vapidKey" (JD.nullable JD.string))
         (JD.field "permissionStatus" (JD.nullable decodePermissionStatus))
         (JD.field "login" (JD.nullable decodeLogin))
         (JD.field "posts" (JD.list postDecoder))
+        (JD.field "swErrors" (JD.list JD.string))
 
 
 port onNewSubscriptionInternal : (JD.Value -> msg) -> Sub msg
@@ -252,6 +255,7 @@ encodeClientstate cs =
           )
         , ( "login", encodeLogin cs.login )
         , ( "posts", JE.list encodePost cs.posts )
+        , ( "swErrors", JE.list JE.string cs.swErrors )
         ]
 
 
@@ -307,6 +311,7 @@ init _ =
       , db = Nothing
       , authSaved = False
       , posts = []
+      , errors = []
       , uuidNamespace =
             UUID.forName "http://github.com/maxhille" UUID.urlNamespace
       }
@@ -401,17 +406,13 @@ update msg model =
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model |> addError "unhandled DB event", Cmd.none )
 
         StoreCreated _ ->
             ( model, openDb )
 
         QueryError err ->
-            let
-                _ =
-                    Debug.log "Query error" err
-            in
-            ( model, Cmd.none )
+            ( model |> addError err, Cmd.none )
 
         PostsQueryResult json ->
             let
@@ -419,8 +420,8 @@ update msg model =
                     JD.decodeValue postsDecoder json
             in
             case result of
-                Err _ ->
-                    ( model, Cmd.none )
+                Err err ->
+                    ( model |> addError (JD.errorToString err), Cmd.none )
 
                 Ok posts ->
                     ( { model | posts = posts }, maybeUploadPosts model.login posts )
@@ -431,14 +432,19 @@ update msg model =
                     JD.decodeValue decodeLogin json
             in
             case result of
-                Err _ ->
-                    ( { model | login = Just LoggedOut }, Cmd.none )
+                Err err ->
+                    ( { model
+                        | login = Just LoggedOut
+                      }
+                        |> addError (JD.errorToString err)
+                    , Cmd.none
+                    )
 
                 Ok login ->
                     ( { model | login = Just login }, checkSubscription login )
 
-        LoginResult (Err _) ->
-            ( model, Cmd.none )
+        LoginResult (Err err) ->
+            ( model |> addError (JD.errorToString err), Cmd.none )
 
         LoginResult (Ok login) ->
             ( { model | login = Just login }
@@ -450,8 +456,8 @@ update msg model =
 
         OnClientMessage result ->
             case result of
-                Err _ ->
-                    ( model, Cmd.none )
+                Err err ->
+                    ( model |> addError (JD.errorToString err), Cmd.none )
 
                 Ok cmsg ->
                     case cmsg of
@@ -484,8 +490,8 @@ update msg model =
 
         NewSubscription result ->
             case result of
-                Err _ ->
-                    ( model, Cmd.none )
+                Err err ->
+                    ( model |> addError (JD.errorToString err), Cmd.none )
 
                 Ok subscription ->
                     ( model
@@ -496,6 +502,7 @@ update msg model =
             ( { model | subscription = Just subscription }, Cmd.none )
 
         Sync _ ->
+            -- TODO do something here?
             ( model, Cmd.none )
 
         NewPost post ->
@@ -503,11 +510,16 @@ update msg model =
 
         OnPutResult result ->
             case result of
-                Err _ ->
-                    ( model, Cmd.none )
+                Err err ->
+                    ( model |> addError (JD.errorToString err), Cmd.none )
 
                 Ok putResult ->
                     ( model, queryPosts putResult.store.db )
+
+
+addError : String -> Model -> Model
+addError str model =
+    { model | errors = List.append model.errors [ str ] }
 
 
 queryPosts : DB.DB -> Cmd Msg
@@ -534,10 +546,6 @@ maybeUploadPosts maybeLogin posts =
             Cmd.none
 
         Just login ->
-            let
-                _ =
-                    Debug.log "maybe upload posts" posts
-            in
             case login of
                 LoggedOut ->
                     Cmd.none
@@ -545,8 +553,7 @@ maybeUploadPosts maybeLogin posts =
                 LoggedIn _ token ->
                     let
                         newPosts =
-                            Debug.log "new posts"
-                                List.filter
+                            List.filter
                                 (\post -> post.pending)
                                 posts
                     in
@@ -644,6 +651,7 @@ clientState model =
     , permissionStatus = model.permissionStatus
     , login = model.login
     , posts = model.posts
+    , swErrors = model.errors
     }
 
 
