@@ -46,7 +46,7 @@ app.ports.subscribeInternal.subscribe(key => {
         });
 });
 
-app.ports.saveSubscription.subscribe(opts => {
+app.ports.uploadSubscription.subscribe(opts => {
     fetch("/api/subscription", {
         method: "POST",
         headers: new Headers({
@@ -61,6 +61,20 @@ app.ports.saveSubscription.subscribe(opts => {
     }).then(response => {
         var result = response.status == 201;
         app.ports.getSubscriptionReply.send(result);
+    });
+});
+
+app.ports.uploadPosts.subscribe(opts => {
+    fetch("/api/posts", {
+        method: "POST",
+        headers: new Headers({
+            Authorization: opts.auth,
+            "Content-Type": "application/json"
+        }),
+        body: JSON.stringify(opts.payload)
+    }).then(response => {
+        var result = response.status == 201;
+        app.ports.uploadPostsReply.send(result);
     });
 });
 
@@ -119,7 +133,7 @@ self.addEventListener("fetch", function(event) {
 });
 
 self.addEventListener("sync", event => {
-    app.ports.onSync.send()
+    app.ports.onSync.send();
 });
 
 self.addEventListener("push", function(event) {

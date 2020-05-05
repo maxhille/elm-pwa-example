@@ -31,7 +31,10 @@ port onVapidkeyResult : (String -> msg) -> Sub msg
 port sendLogin : JE.Value -> Cmd msg
 
 
-port saveSubscription : JE.Value -> Cmd msg
+port uploadSubscription : JE.Value -> Cmd msg
+
+
+port uploadPosts : JE.Value -> Cmd msg
 
 
 port getSubscription : JE.Value -> Cmd msg
@@ -368,8 +371,10 @@ logUpdate f msg model =
         ( newModel, newCmd ) =
             f msg model
 
-        _ =
-            Debug.log "SW update" ( msg, newModel, newCmd )
+        {-
+           _ =
+               Debug.log "SW update" ( msg, newModel, newCmd )
+        -}
     in
     ( newModel, newCmd )
 
@@ -415,10 +420,10 @@ update msg model =
             in
             case result of
                 Err _ ->
-                    ( { model | login = Just LoggedOut }, Cmd.none )
+                    ( model, Cmd.none )
 
                 Ok posts ->
-                    ( { model | posts = posts }, Cmd.none )
+                    ( { model | posts = posts }, maybeUploadPosts model.login posts )
 
         LoginQueryResult json ->
             let
@@ -522,6 +527,44 @@ savePost maybeDb post =
                 (encodePost post)
 
 
+maybeUploadPosts : Maybe Login -> List Post -> Cmd Msg
+maybeUploadPosts maybeLogin posts =
+    case maybeLogin of
+        Nothing ->
+            Cmd.none
+
+        Just login ->
+            let
+                _ =
+                    Debug.log "maybe upload posts" posts
+            in
+            case login of
+                LoggedOut ->
+                    Cmd.none
+
+                LoggedIn _ token ->
+                    let
+                        newPosts =
+                            Debug.log "new posts"
+                                List.filter
+                                (\post -> post.pending)
+                                posts
+                    in
+                    if List.isEmpty newPosts then
+                        -- TODO trigger download
+                        Cmd.none
+
+                    else
+                        authenticatedOpts token
+                            (Just (encodePosts newPosts))
+                            |> uploadPosts
+
+
+encodePosts : List Post -> JE.Value
+encodePosts =
+    JE.list encodePost
+
+
 newPost : Model -> String -> Cmd Msg
 newPost model text =
     case model.login of
@@ -571,7 +614,7 @@ maybeSaveSubscription maybeLogin subscription =
                         Subscribed data ->
                             authenticatedOpts token
                                 (Just (encodeSubscriptionData data))
-                                |> saveSubscription
+                                |> uploadSubscription
 
 
 authenticatedOpts : Token -> Maybe JE.Value -> JE.Value
