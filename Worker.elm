@@ -37,6 +37,9 @@ port uploadSubscription : JE.Value -> Cmd msg
 port uploadPosts : JE.Value -> Cmd msg
 
 
+port uploadPostsReply : (JE.Value -> msg) -> Sub msg
+
+
 port getSubscription : JE.Value -> Cmd msg
 
 
@@ -92,6 +95,11 @@ type Msg
     | OnPutResult (Result JD.Error DB.PutResult)
     | LoginQueryResult JD.Value
     | PostsQueryResult JD.Value
+    | UploadPostsResult (Result JD.Error PostResult)
+
+
+type alias PostResult =
+    Bool
 
 
 type Login
@@ -516,6 +524,19 @@ update msg model =
                 Ok putResult ->
                     ( model, queryPosts putResult.store.db )
 
+        UploadPostsResult result ->
+            case result of
+                Err err ->
+                    ( model |> addError (JD.errorToString err), Cmd.none )
+
+                Ok ok ->
+                    if ok then
+                        -- TODO update pending to false
+                        ( model, Cmd.none )
+
+                    else
+                        ( model |> addError "upload posts failed", Cmd.none )
+
 
 addError : String -> Model -> Model
 addError str model =
@@ -669,7 +690,18 @@ subscriptions _ =
         , getSubscriptionReply HasSubscription
         , SW.onSync Sync
         , DB.putResult OnPutResult
+        , onUploadPostsReply UploadPostsResult
         ]
+
+
+onUploadPostsReply : (Result JD.Error PostResult -> msg) -> Sub msg
+onUploadPostsReply msg =
+    uploadPostsReply (JD.decodeValue uploadPostsReplyDecoder >> msg)
+
+
+uploadPostsReplyDecoder : JD.Decoder PostResult
+uploadPostsReplyDecoder =
+    JD.bool
 
 
 onQueryResult : Sub Msg

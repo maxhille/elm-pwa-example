@@ -123,6 +123,7 @@ func newlocalDB() (*localDB, error) {
 	db.AutoMigrate(&app.KeyPair{})
 	db.AutoMigrate(&app.Subscription{})
 	db.AutoMigrate(&app.User{})
+	db.AutoMigrate(&app.Post{})
 
 	return &localDB{db}, nil
 }
@@ -182,12 +183,12 @@ func (db *localDB) ReadAllSubscriptions(ctx context.Context) ([]app.Subscription
 	return []app.Subscription{}, errors.New("not implemented")
 }
 
-func (db *localDB) GetPosts(ctx context.Context) ([]app.Post, error) {
+func (db *localDB) ReadPosts(ctx context.Context) ([]app.Post, error) {
 	return []app.Post{}, errors.New("not implemented")
 }
 
-func (db *localDB) PutPost(ctx context.Context, p app.Post) error {
-	return errors.New("not implemented")
+func (db *localDB) CreatePosts(ctx context.Context, ps []app.Post) error {
+	return db.gorm.Save(&ps).Error
 }
 
 func (db *localDB) GetUserByName(ctx context.Context, name string) (u app.User,

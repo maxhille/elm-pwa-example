@@ -20,6 +20,6 @@ type DB interface {
 	ReadAllSubscriptions(context.Context) ([]Subscription, error)
 	GetKey(context.Context) (KeyPair, error)
 	PutKey(context.Context, KeyPair) error
-	GetPosts(context.Context) ([]Post, error)
-	PutPost(context.Context, Post) error
+	ReadPosts(context.Context) ([]Post, error)
+	CreatePosts(context.Context, []Post) error
 }

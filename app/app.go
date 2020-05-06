@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/SherClockHolmes/webpush-go"
 	"github.com/google/uuid"
@@ -24,10 +23,10 @@ type Subscription struct {
 }
 
 type Post struct {
-	ID     uuid.UUID `json:"id" datastore:"-"`
-	Author string    `json:"author"`
-	Text   string    `json:"text"`
-	Time   time.Time `json:"time"`
+	ID   uuid.UUID `json:"id" datastore:"-" gorm:"-"`
+	User User      `json:"user" gorm:"association_foreignkey_id"`
+	Text string    `json:"text"`
+	Time Time      `json:"time"`
 }
 
 type KeyPair struct {
@@ -52,8 +51,10 @@ func (app *App) Run(port string) error {
 		post: app.postSubscription,
 		get:  app.getSubscription,
 	}.handle)
-	app.http.HandleFunc("/api/post", app.putPost)
-	app.http.HandleFunc("/api/posts", app.getPosts)
+	app.HandleFuncAuthed("/api/posts", methodHandler{
+		post: app.postPosts,
+		get:  app.getPosts,
+	}.handle)
 	app.http.HandleFunc("/api/login", app.login)
 
 	return app.http.ListenAndServe(":"+port, nil)
@@ -245,7 +246,7 @@ func (app *App) login(w http.ResponseWriter, req *http.Request) {
 func (app *App) getPosts(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	ps, err := app.db.GetPosts(ctx)
+	ps, err := app.db.ReadPosts(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get posts from db: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -263,10 +264,10 @@ func (app *App) getPosts(w http.ResponseWriter, req *http.Request) {
 	w.Write(json)
 }
 
-func (app *App) putPost(w http.ResponseWriter, req *http.Request) {
+func (app *App) postPosts(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	u, err := app.getUser(ctx)
+	_, err := app.getUser(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get user (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -275,12 +276,9 @@ func (app *App) putPost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	decoder := json.NewDecoder(req.Body)
-	p := Post{
-		Author: u.Name,
-		Time:   time.Now(),
-		ID:     uuid.New(),
-	}
-	err = decoder.Decode(&p)
+	ps := []Post{}
+	err = decoder.Decode(&ps)
+	// TODO decorate with server side data (user, time, id)
 	if err != nil {
 		msg := fmt.Sprintf("could not read json body key (%v)", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -288,29 +286,24 @@ func (app *App) putPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = app.db.PutPost(ctx, p)
+	err = app.db.CreatePosts(ctx, ps)
 	if err != nil {
-		msg := fmt.Sprintf("could not save post (%v)", err)
+		msg := fmt.Sprintf("could not save posts (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(msg))
 		return
 	}
-
-	json, err := json.Marshal(&p)
-	if err != nil {
-		msg := fmt.Sprintf("could not marshal post (%v)", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(msg))
-		return
-	}
-	w.WriteHeader(http.StatusCreated)
-	w.Write(json)
 
 	// send push
 	err = app.tasks.Notify(ctx)
 	if err != nil {
-		log.Printf("could not notify clients: %v", err)
+		msg := fmt.Sprintf("could not notify clients (%v)", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(msg))
+		return
 	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (app *App) getUser(ctx context.Context) (User, error) {

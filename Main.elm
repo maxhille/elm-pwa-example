@@ -339,7 +339,7 @@ update msg model =
                         , permissionStatus = cu.permissionStatus
                         , login = cu.login
                         , posts = cu.posts
-                        , swErrors = model.swErrors
+                        , swErrors = cu.swErrors
                       }
                     , Cmd.none
                     )
