@@ -21,5 +21,5 @@ type DB interface {
 	GetKey(context.Context) (KeyPair, error)
 	PutKey(context.Context, KeyPair) error
 	ReadPosts(context.Context) ([]Post, error)
-	CreatePosts(context.Context, []Post) error
+	PutPost(context.Context, Post) error
 }

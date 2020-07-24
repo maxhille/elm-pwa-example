@@ -102,8 +102,7 @@ var urlsToCache = [
     "/",
     "/index.js",
     "/elm.js",
-    "/elm-worker.js",
-    "/vapid-public-key"
+    "/elm-worker.js"
 ];
 
 self.addEventListener("install", function(event) {

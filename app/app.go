@@ -16,15 +16,15 @@ import (
 var curve = elliptic.P256()
 
 type Subscription struct {
-	UserID   uuid.UUID `json:-`
+	UserID   uuid.UUID `json:"-" datastore:"-"`
 	Endpoint string    `json:"endpoint"`
 	P256dh   []byte    `json:"p256dh"`
 	Auth     []byte    `json:"auth"`
 }
 
 type Post struct {
-	ID   uuid.UUID `json:"id" datastore:"-" gorm:"-"`
-	User User      `json:"user" gorm:"association_foreignkey_id"`
+	ID   uuid.UUID `json:"id" datastore:"-"`
+	User User      `json:"user"`
 	Text string    `json:"text"`
 	Time Time      `json:"time"`
 }
@@ -35,14 +35,13 @@ type KeyPair struct {
 }
 
 type App struct {
-	db    DB
-	tasks Tasks
-	user  UserService
-	http  HttpHandler
+	db   DB
+	user UserService
+	http HttpHandler
 }
 
-func New(db DB, tasks Tasks, user UserService, handler HttpHandler) App {
-	return App{db, tasks, user, handler}
+func New(db DB, user UserService, handler HttpHandler) App {
+	return App{db, user, handler}
 }
 
 func (app *App) Run(port string) error {
@@ -104,27 +103,35 @@ func (app *App) getPublicKey(w http.ResponseWriter, req *http.Request) {
 	k, err := app.db.GetKey(ctx)
 
 	// no key yet? let's build it now
-	if err == ErrNoSuchEntity {
+	switch err {
+	case ErrNoSuchEntity:
 		sk, pk, err2 := webpush.GenerateVAPIDKeys()
 		if err2 != nil {
-			msg := fmt.Sprintf("could not create VAPID keys (%v)", err)
+			msg := fmt.Sprintf("could not create VAPID keypair (%v)", err2)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(msg))
 			return
 		}
-		log.Printf("key: %v", k)
 		k.PK = pk
 		k.SK = sk
 		err2 = app.db.PutKey(ctx, k)
 		if err2 != nil {
-			msg := fmt.Sprintf("could not save VAPID keys (%v)", err)
+			msg := fmt.Sprintf("could not save VAPID keypair (%v)", err2)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(msg))
 			return
 		}
+		// all ok
+	case nil:
+		w.Write([]byte(k.PK))
+	// other error
+	default:
+		msg := fmt.Sprintf("could not get VAPID keypair (%v)", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(msg))
+		return
 	}
 
-	w.Write([]byte(k.PK))
 }
 
 func (app *App) postSubscription(w http.ResponseWriter, req *http.Request) {
@@ -267,7 +274,7 @@ func (app *App) getPosts(w http.ResponseWriter, req *http.Request) {
 func (app *App) postPosts(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	_, err := app.getUser(ctx)
+	u, err := app.getUser(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not get user (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -278,7 +285,6 @@ func (app *App) postPosts(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	ps := []Post{}
 	err = decoder.Decode(&ps)
-	// TODO decorate with server side data (user, time, id)
 	if err != nil {
 		msg := fmt.Sprintf("could not read json body key (%v)", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -286,16 +292,21 @@ func (app *App) postPosts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = app.db.CreatePosts(ctx, ps)
-	if err != nil {
-		msg := fmt.Sprintf("could not save posts (%v)", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(msg))
-		return
+	// TODO decorate with server side data (user, time, id)
+	for _, p := range ps {
+		p.User = u
+		p.ID = uuid.New()
+		err = app.db.PutPost(ctx, p)
+		if err != nil {
+			msg := fmt.Sprintf("could not save posts (%v)", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(msg))
+			return
+		}
 	}
 
 	// send push
-	err = app.tasks.Notify(ctx)
+	err = app.notifyAll(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not notify clients (%v)", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -310,19 +321,10 @@ func (app *App) getUser(ctx context.Context) (User, error) {
 	id := app.user.Current(ctx)
 
 	u, err := app.db.GetUser(ctx, id)
-	if err == ErrNoSuchEntity {
-		err2 := app.db.PutUser(ctx, u)
-		if err2 != nil {
-			return User{}, err2
-		}
-	} else if err != nil {
-		return User{}, err
-	}
-
-	return u, nil
+	return u, err
 }
 
-func (app *App) notifyAll(ctx context.Context, _ string) error {
+func (app *App) notifyAll(ctx context.Context) error {
 	// get server keys
 	k, err := app.db.GetKey(ctx)
 	if err != nil {

@@ -6,16 +6,11 @@ import (
 	"log"
 	"net/http"
 
+	"cloud.google.com/go/datastore"
 	"github.com/google/uuid"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/maxhille/elm-pwa-example/app"
+	"google.golang.org/api/iterator"
 )
-
-type Account struct {
-	Name  string
-	Token string
-}
 
 func main() {
 	db, err := newlocalDB()
@@ -29,7 +24,6 @@ func main() {
 
 	app := app.New(
 		db,
-		&localTasks{},
 		newLocalUserService(db),
 		&localHandler{},
 	)
@@ -111,102 +105,113 @@ func (lh *localHandler) ListenAndServe(port string,
 }
 
 type localDB struct {
-	gorm *gorm.DB
+	client *datastore.Client
 }
 
 func newlocalDB() (*localDB, error) {
-	db, err := gorm.Open("sqlite3", ".local.db")
+	log.Printf("opening db")
+	ctx := context.Background()
+	cl, err := datastore.NewClient(ctx, "elm-pwa-example")
 	if err != nil {
 		return nil, err
 	}
 
-	db.AutoMigrate(&app.KeyPair{})
-	db.AutoMigrate(&app.Subscription{})
-	db.AutoMigrate(&app.User{})
-	db.AutoMigrate(&app.Post{})
-
-	return &localDB{db}, nil
+	return &localDB{cl}, nil
 }
 
 func (db *localDB) close() {
-	db.gorm.Close()
+	db.client.Close()
 }
 
 func (db *localDB) GetKey(ctx context.Context) (app.KeyPair, error) {
+	k := datastore.NameKey("VapidKey", "default", nil)
 	kp := app.KeyPair{}
-	err := db.gorm.Take(&kp).Error
-	if err != nil {
-		log.Printf("getkey err: %v", err)
+	err := db.client.Get(ctx, k, &kp)
+	switch err {
+	case datastore.ErrNoSuchEntity:
 		return kp, app.ErrNoSuchEntity
+	default:
+		return kp, err
 	}
-	return kp, nil
 }
 
 func (db *localDB) PutKey(ctx context.Context, kp app.KeyPair) error {
-	log.Printf("saving new keypair: %v", kp)
-	db.gorm.Create(&kp)
-	return nil
+	k := datastore.NameKey("VapidKey", "default", nil)
+	_, err := db.client.Put(ctx, k, &kp)
+	return err
 }
 
 func (db *localDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
 	error) {
+	uk := datastore.NameKey("User", id.String(), nil)
 	u := app.User{}
-	err := db.gorm.Where("id = ?", id).First(&u).Error
+	err := db.client.Get(ctx, uk, &u)
+	u.ID = id
 	return u, err
 }
 
-func (db *localDB) GetUsers(ctx context.Context) ([]app.User,
-	error) {
+func (db *localDB) GetUsers(ctx context.Context) ([]app.User, error) {
 	return nil, errors.New("not implemented")
 }
 
 func (db *localDB) PutUser(ctx context.Context, u app.User) error {
-	return errors.New("not implemented")
+	uk := datastore.NameKey("User", u.ID.String(), nil)
+	_, err := db.client.Put(ctx, uk, &u)
+	return err
 }
 
 func (db *localDB) CreateSubscription(ctx context.Context,
 	s app.Subscription) error {
-	return db.gorm.Save(&s).Error
+	uk := datastore.NameKey("User", s.UserID.String(), nil)
+	sk := datastore.NameKey("Subscription", "default", uk)
+	_, err := db.client.Put(ctx, sk, &s)
+	return err
+
 }
 
 func (db *localDB) ReadSubscription(ctx context.Context, uid uuid.UUID) (
 	s app.Subscription, err error) {
-	err = db.gorm.Where("user_id = ?", uid).First(&s).Error
-	if gorm.IsRecordNotFoundError(err) {
-		err = app.ErrNoSuchEntity
-	}
+	uk := datastore.NameKey("User", uid.String(), nil)
+	sk := datastore.NameKey("Subscription", "default", uk)
+	s.UserID = uid
+	err = db.client.Get(ctx, sk, &s)
 	return
 }
 
-func (db *localDB) ReadAllSubscriptions(ctx context.Context) ([]app.Subscription,
-	error) {
-	return []app.Subscription{}, errors.New("not implemented")
+func (db *localDB) ReadAllSubscriptions(ctx context.Context) (
+	ss []app.Subscription, err error) {
+	q := datastore.NewQuery("Subscription")
+	it := db.client.Run(ctx, q)
+	for {
+		var s app.Subscription
+		_, err2 := it.Next(&s)
+		if err2 == iterator.Done {
+			break
+		}
+		if err2 != nil {
+			return ss, err2
+		}
+		ss = append(ss, s)
+	}
+
+	return
 }
 
 func (db *localDB) ReadPosts(ctx context.Context) ([]app.Post, error) {
 	return []app.Post{}, errors.New("not implemented")
 }
 
-func (db *localDB) CreatePosts(ctx context.Context, ps []app.Post) error {
-	return db.gorm.Save(&ps).Error
+func (db *localDB) PutPost(ctx context.Context, p app.Post) error {
+	pk := datastore.NameKey("Post", p.ID.String(), nil)
+	_, err := db.client.Put(ctx, pk, &p)
+	return err
 }
 
 func (db *localDB) GetUserByName(ctx context.Context, name string) (u app.User,
 	err error) {
-	err = db.gorm.First(&u).Error
+	// TODO
+	err = errors.New("not implemented")
 	return
-}
-func (db *localDB) createUser(u *app.User) error {
-	return db.gorm.Create(&u).Error
-}
-
-type localTasks struct {
-	app.Tasks
-}
-
-func (ct *localTasks) Notify(ctx context.Context) error {
-	// TODO notify
-	return nil
 }
 
 func newLocalUserService(db *localDB) app.UserService {
@@ -250,5 +255,5 @@ func (us *localUserService) Register(ctx context.Context, name string) (
 		Name: name,
 		ID:   uuid.New(),
 	}
-	return u, us.db.createUser(&u)
+	return u, us.db.PutUser(ctx, u)
 }

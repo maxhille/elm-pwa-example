@@ -8,7 +8,7 @@ import (
 )
 
 type User struct {
-	ID   uuid.UUID `json:"id" gorm:"id"`
+	ID   uuid.UUID `json:"id" datastore:"-"`
 	Name string    `json:"name"`
 }
 

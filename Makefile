@@ -20,6 +20,7 @@ build/srv: $(go_src)
 	go build -o build/srv cmd/local/main.go 
 
 serve:
+	export DATASTORE_EMULATOR_HOST=localhost:8081; \
 	while true; do \
 		kill `cat .pid`; \
 		clear ;\
