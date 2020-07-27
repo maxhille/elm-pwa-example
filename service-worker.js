@@ -55,8 +55,8 @@ app.ports.uploadSubscription.subscribe(opts => {
         }),
         body: JSON.stringify({
             endpoint: opts.payload.endpoint,
-            auth: btoa(opts.payload.auth),
-            p256dh: btoa(opts.payload.p256dh)
+            auth: opts.payload.auth,
+            p256dh: opts.payload.p256dh
         })
     }).then(response => {
         var result = response.status == 201;

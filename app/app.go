@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"crypto/elliptic"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,8 +17,8 @@ var curve = elliptic.P256()
 type Subscription struct {
 	UserID   uuid.UUID `json:"-" datastore:"-"`
 	Endpoint string    `json:"endpoint"`
-	P256dh   []byte    `json:"p256dh"`
-	Auth     []byte    `json:"auth"`
+	P256dh   string    `json:"p256dh"`
+	Auth     string    `json:"auth"`
 }
 
 type Post struct {
@@ -343,8 +342,8 @@ func (app *App) notifyAll(ctx context.Context) error {
 		ws := webpush.Subscription{}
 		ws.Endpoint = s.Endpoint
 		ws.Keys = webpush.Keys{}
-		ws.Keys.Auth = base64.RawURLEncoding.EncodeToString(s.Auth)
-		ws.Keys.P256dh = base64.RawURLEncoding.EncodeToString(s.P256dh)
+		ws.Keys.Auth = s.Auth
+		ws.Keys.P256dh = s.P256dh
 
 		// Send Notification
 		res, err := webpush.SendNotification([]byte("msg-sync"), &ws, &webpush.Options{
