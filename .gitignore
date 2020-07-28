@@ -4,3 +4,4 @@ build/
 *.swp
 .local.db
 .pid
+.datastore/
