@@ -31,7 +31,6 @@ func main() {
 	if err := app.Run("8080"); err != nil {
 		log.Fatal(err)
 	}
-
 }
 
 type LoggingHandler struct {
@@ -141,8 +140,7 @@ func (db *localDB) PutKey(ctx context.Context, kp app.KeyPair) error {
 	return err
 }
 
-func (db *localDB) GetUser(ctx context.Context, id uuid.UUID) (app.User,
-	error) {
+func (db *localDB) GetUser(ctx context.Context, id uuid.UUID) (app.User, error) {
 	uk := datastore.NameKey("User", id.String(), nil)
 	u := app.User{}
 	err := db.client.Get(ctx, uk, &u)
@@ -160,8 +158,7 @@ func (db *localDB) PutUser(ctx context.Context, u app.User) error {
 	return err
 }
 
-func (db *localDB) CreateSubscription(ctx context.Context,
-	s app.Subscription) error {
+func (db *localDB) CreateSubscription(ctx context.Context, s app.Subscription) error {
 	uk := datastore.NameKey("User", s.UserID.String(), nil)
 	sk := datastore.NameKey("Subscription", "default", uk)
 	_, err := db.client.Put(ctx, sk, &s)
@@ -169,8 +166,7 @@ func (db *localDB) CreateSubscription(ctx context.Context,
 
 }
 
-func (db *localDB) ReadSubscription(ctx context.Context, uid uuid.UUID) (
-	s app.Subscription, err error) {
+func (db *localDB) ReadSubscription(ctx context.Context, uid uuid.UUID) (s app.Subscription, err error) {
 	uk := datastore.NameKey("User", uid.String(), nil)
 	sk := datastore.NameKey("Subscription", "default", uk)
 	s.UserID = uid
@@ -181,8 +177,7 @@ func (db *localDB) ReadSubscription(ctx context.Context, uid uuid.UUID) (
 	return
 }
 
-func (db *localDB) ReadAllSubscriptions(ctx context.Context) (
-	ss []app.Subscription, err error) {
+func (db *localDB) ReadAllSubscriptions(ctx context.Context) (ss []app.Subscription, err error) {
 	q := datastore.NewQuery("Subscription")
 	it := db.client.Run(ctx, q)
 	for {
@@ -210,8 +205,7 @@ func (db *localDB) PutPost(ctx context.Context, p app.Post) error {
 	return err
 }
 
-func (db *localDB) GetUserByName(ctx context.Context, name string) (u app.User,
-	err error) {
+func (db *localDB) GetUserByName(ctx context.Context, name string) (u app.User, err error) {
 	// TODO
 	err = errors.New("not implemented")
 	return
@@ -225,8 +219,7 @@ type localUserService struct {
 	db *localDB
 }
 
-func (us *localUserService) GetUserByName(ctx context.Context, name string) (
-	app.User, error) {
+func (us *localUserService) GetUserByName(ctx context.Context, name string) (app.User, error) {
 	return app.User{}, errors.New("not implemented")
 }
 
@@ -252,8 +245,7 @@ func (us *localUserService) Login(ctx context.Context, name string) (uuid.UUID,
 	return u.ID, err
 }
 
-func (us *localUserService) Register(ctx context.Context, name string) (
-	app.User, error) {
+func (us *localUserService) Register(ctx context.Context, name string) (app.User, error) {
 	u := app.User{
 		Name: name,
 		ID:   uuid.New(),
