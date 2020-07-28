@@ -175,6 +175,9 @@ func (db *localDB) ReadSubscription(ctx context.Context, uid uuid.UUID) (
 	sk := datastore.NameKey("Subscription", "default", uk)
 	s.UserID = uid
 	err = db.client.Get(ctx, sk, &s)
+	if err == datastore.ErrNoSuchEntity {
+		err = app.ErrNoSuchEntity
+	}
 	return
 }
 
