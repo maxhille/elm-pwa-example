@@ -50,7 +50,7 @@ func (app *App) Run(port string) error {
 		get:  app.getSubscription,
 	}.handle)
 	app.HandleFuncAuthed("/api/posts", methodHandler{
-		post: app.postPosts,
+		post: app.postPost,
 		get:  app.getPosts,
 	}.handle)
 	app.http.HandleFunc("/api/login", app.login)
@@ -270,7 +270,7 @@ func (app *App) getPosts(w http.ResponseWriter, req *http.Request) {
 	w.Write(json)
 }
 
-func (app *App) postPosts(w http.ResponseWriter, req *http.Request) {
+func (app *App) postPost(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	u, err := app.getUser(ctx)
@@ -282,8 +282,8 @@ func (app *App) postPosts(w http.ResponseWriter, req *http.Request) {
 	}
 
 	decoder := json.NewDecoder(req.Body)
-	ps := []Post{}
-	err = decoder.Decode(&ps)
+	p := Post{}
+	err = decoder.Decode(&p)
 	if err != nil {
 		msg := fmt.Sprintf("could not read json body key (%v)", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -291,17 +291,14 @@ func (app *App) postPosts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// TODO decorate with server side data (user, time, id)
-	for _, p := range ps {
-		p.User = u
-		p.ID = uuid.New()
-		err = app.db.PutPost(ctx, p)
-		if err != nil {
-			msg := fmt.Sprintf("could not save posts (%v)", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(msg))
-			return
-		}
+	p.User = u
+	p.ID = uuid.New()
+	err = app.db.PutPost(ctx, p)
+	if err != nil {
+		msg := fmt.Sprintf("could not save post (%v)", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(msg))
+		return
 	}
 
 	// send push
@@ -313,7 +310,8 @@ func (app *App) postPosts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(p.ID.String()))
 }
 
 func (app *App) getUser(ctx context.Context) (User, error) {

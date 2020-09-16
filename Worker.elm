@@ -34,10 +34,10 @@ port sendLogin : JE.Value -> Cmd msg
 port uploadSubscription : JE.Value -> Cmd msg
 
 
-port uploadPosts : JE.Value -> Cmd msg
+port uploadPost : JE.Value -> Cmd msg
 
 
-port uploadPostsReply : (JE.Value -> msg) -> Sub msg
+port uploadPostReply : (JE.Value -> msg) -> Sub msg
 
 
 port getSubscription : JE.Value -> Cmd msg
@@ -63,7 +63,7 @@ type alias Post =
     , user : User
     , time : Time.Posix
     , text : String
-    , pending : Bool
+    , status : PostStatus
     }
 
 
@@ -95,11 +95,17 @@ type Msg
     | OnPutResult (Result JD.Error DB.PutResult)
     | LoginQueryResult JD.Value
     | PostsQueryResult JD.Value
-    | UploadPostsResult (Result JD.Error PostResult)
+    | UploadPostResult (Result PostError UUID.UUID)
 
 
-type alias PostResult =
-    Bool
+type alias PostError =
+    String
+
+
+type PostStatus
+    = Sent
+    | Pending
+    | Failed
 
 
 type Login
@@ -274,8 +280,21 @@ encodePost post =
         , ( "id", JE.string (UUID.toString post.id) )
         , ( "time", JE.int (Time.posixToMillis post.time) )
         , ( "text", JE.string post.text )
-        , ( "pending", JE.bool post.pending )
+        , ( "status", encodeStatus post.status )
         ]
+
+
+encodeStatus : PostStatus -> JE.Value
+encodeStatus status =
+    case status of
+        Pending ->
+            JE.string "pending"
+
+        Sent ->
+            JE.string "sent"
+
+        Failed ->
+            JE.string "failed"
 
 
 postDecoder : JD.Decoder Post
@@ -285,7 +304,27 @@ postDecoder =
         (JD.field "user" userDecoder)
         (JD.field "time" (JD.map Time.millisToPosix JD.int))
         (JD.field "text" JD.string)
-        (JD.field "pending" JD.bool)
+        (JD.field "status" postStatusDecoder)
+
+
+postStatusDecoder : JD.Decoder PostStatus
+postStatusDecoder =
+    JD.string
+        |> JD.andThen
+            (\s ->
+                case s of
+                    "pending" ->
+                        JD.succeed Pending
+
+                    "sent" ->
+                        JD.succeed Sent
+
+                    "failed" ->
+                        JD.succeed Failed
+
+                    _ ->
+                        JD.fail ("could not decode PostStatus: " ++ s)
+            )
 
 
 uuidDecoder : JD.Decoder UUID
@@ -432,7 +471,7 @@ update msg model =
                     ( model |> addError (JD.errorToString err), Cmd.none )
 
                 Ok posts ->
-                    ( { model | posts = posts }, maybeUploadPosts model.login posts )
+                    ( { model | posts = posts }, Cmd.none )
 
         LoginQueryResult json ->
             let
@@ -514,7 +553,12 @@ update msg model =
             ( model, Cmd.none )
 
         NewPost post ->
-            ( model, savePost model.db post )
+            ( model
+            , Cmd.batch
+                [ savePost model.db post
+                , maybeUploadPost model.login post
+                ]
+            )
 
         OnPutResult result ->
             case result of
@@ -524,18 +568,14 @@ update msg model =
                 Ok putResult ->
                     ( model, queryPosts putResult.store.db )
 
-        UploadPostsResult result ->
+        UploadPostResult result ->
             case result of
                 Err err ->
-                    ( model |> addError (JD.errorToString err), Cmd.none )
+                    ( model |> addError err, Cmd.none )
 
                 Ok ok ->
-                    if ok then
-                        -- TODO update pending to false
-                        ( model, Cmd.none )
-
-                    else
-                        ( model |> addError "upload posts failed", Cmd.none )
+                    -- TODO update status in db
+                    ( model, Cmd.none )
 
 
 addError : String -> Model -> Model
@@ -560,8 +600,8 @@ savePost maybeDb post =
                 (encodePost post)
 
 
-maybeUploadPosts : Maybe Login -> List Post -> Cmd Msg
-maybeUploadPosts maybeLogin posts =
+maybeUploadPost : Maybe Login -> Post -> Cmd Msg
+maybeUploadPost maybeLogin post =
     case maybeLogin of
         Nothing ->
             Cmd.none
@@ -572,25 +612,9 @@ maybeUploadPosts maybeLogin posts =
                     Cmd.none
 
                 LoggedIn _ token ->
-                    let
-                        newPosts =
-                            List.filter
-                                (\post -> post.pending)
-                                posts
-                    in
-                    if List.isEmpty newPosts then
-                        -- TODO trigger download
-                        Cmd.none
-
-                    else
-                        authenticatedOpts token
-                            (Just (encodePosts newPosts))
-                            |> uploadPosts
-
-
-encodePosts : List Post -> JE.Value
-encodePosts =
-    JE.list encodePost
+                    authenticatedOpts token
+                        (Just (encodePost post))
+                        |> uploadPost
 
 
 newPost : Model -> String -> Cmd Msg
@@ -612,7 +636,7 @@ newPost model text =
                                 , user = user
                                 , text = text
                                 , time = time
-                                , pending = True
+                                , status = Pending
                                 }
                         )
                         Time.now
@@ -690,18 +714,37 @@ subscriptions _ =
         , getSubscriptionReply HasSubscription
         , SW.onSync Sync
         , DB.putResult OnPutResult
-        , onUploadPostsReply UploadPostsResult
+        , onUploadPostReply UploadPostResult
         ]
 
 
-onUploadPostsReply : (Result JD.Error PostResult -> msg) -> Sub msg
-onUploadPostsReply msg =
-    uploadPostsReply (JD.decodeValue uploadPostsReplyDecoder >> msg)
+onUploadPostReply : (Result PostError UUID.UUID -> msg) -> Sub msg
+onUploadPostReply msg =
+    uploadPostReply (JD.decodeValue uploadPostReplyDecoder >> toPostError >> msg)
 
 
-uploadPostsReplyDecoder : JD.Decoder PostResult
-uploadPostsReplyDecoder =
-    JD.bool
+toPostError : Result JD.Error a -> Result PostError a
+toPostError result =
+    case result of
+        Ok a ->
+            Ok a
+
+        Err err ->
+            Err <| "json decoder error: " ++ JD.errorToString err
+
+
+uploadPostReplyDecoder : JD.Decoder UUID.UUID
+uploadPostReplyDecoder =
+    JD.field "status" JD.int
+        |> JD.andThen
+            (\status ->
+                case status of
+                    201 ->
+                        JD.field "id" uuidDecoder
+
+                    _ ->
+                        JD.fail <| "unexpected response: " ++ String.fromInt status
+            )
 
 
 onQueryResult : Sub Msg
@@ -739,19 +782,19 @@ postsDecoder : JD.Decoder (List Post)
 postsDecoder =
     JD.list
         (JD.map5
-            (\id user time text pending ->
+            (\id user time text status ->
                 { id = id
                 , user = user
                 , time = Time.millisToPosix time
                 , text = text
-                , pending = pending
+                , status = status
                 }
             )
             (JD.field "id" uuidDecoder)
             (JD.field "user" userDecoder)
             (JD.field "time" JD.int)
             (JD.field "text" JD.string)
-            (JD.field "pending" JD.bool)
+            (JD.field "status" postStatusDecoder)
         )
 
 

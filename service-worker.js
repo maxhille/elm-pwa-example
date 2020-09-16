@@ -64,7 +64,7 @@ app.ports.uploadSubscription.subscribe(opts => {
     });
 });
 
-app.ports.uploadPosts.subscribe(opts => {
+app.ports.uploadPost.subscribe(opts => {
     fetch("/api/posts", {
         method: "POST",
         headers: new Headers({
@@ -73,8 +73,17 @@ app.ports.uploadPosts.subscribe(opts => {
         }),
         body: JSON.stringify(opts.payload)
     }).then(response => {
-        var result = response.status == 201;
-        app.ports.uploadPostsReply.send(result);
+        var result = {
+            status: response.status
+        };
+        if (response.status == 201) {
+           response.text().then(id => {
+                result.id = id;
+                app.ports.uploadPostReply.send(result);
+           });
+        } else {
+            app.ports.uploadPostReply.send(result);
+        }
     });
 });
 
